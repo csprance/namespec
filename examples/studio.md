@@ -1,12 +1,12 @@
-# Studio naming example
+# Fictional studio naming example
 
-[studio.names](studio.names) is a draft transcription of a studio naming conventions document. It is an executable example for reviewing that page's rules, not an approved production configuration. The source page's update date is a placeholder, and its linked Codes and Folder Structure pages were not supplied.
+[studio.names](studio.names) demonstrates a small production naming system using fictional projects, assets, identifiers, and sample values. MoonOrchard is an imaginary show, KestrelQuest an imaginary adventure series, and PixelTea2042 an imaginary campaign. These examples are teaching data, not a production studio's naming policy.
 
-The templates come first, followed by reusable field rules. Optional tags, job suffixes, and frame components currently use separate resource definitions because Namespec does not yet support optional template groups.
+The templates come first, followed by reusable field rules. Optional tags, job suffixes, and frame components use separate resource definitions because Namespec does not yet support optional template groups.
 
 ## Editable examples
 
-Each CSV contains exact names, expected types, extracted metadata in separate columns, and explanations. Additional edge cases supplement the examples quoted by the source.
+Each CSV contains sample names, expected types, extracted metadata in separate columns, and explanations. Valid examples sit alongside malformed and ambiguous inputs so changes can be checked against explicit expectations.
 
 | Table | Contents |
 | --- | --- |
@@ -35,20 +35,19 @@ assert item.locate() == ("pub/mdl/outputs/prop_Lantern_mdl_v017/prop_Lantern_mdl
 
 ## Context is part of identification
 
-A basename can match more than one convention. `prop_Lantern_mdl_model_v017.abc` fits both an asset render and a published output. The relative `work/.../renders/...` or `pub/.../outputs/...` path distinguishes them. Likewise, `731_037` could be a sequence or a job folder; `NVA_086` could be a sequence or an asset until an authoritative asset-type vocabulary narrows the possibilities.
+A basename can match more than one convention. `prop_Lantern_mdl_model_v017.abc` fits both an asset render and a published output. The relative `work/.../renders/...` or `pub/.../outputs/...` path distinguishes them. Likewise, `731_037` could be a sequence or a job folder; `NVA_086` could be a sequence or an asset while asset-type codes remain unrestricted.
 
-`inspect()` returns every match. `parse()` requires a resource hint when multiple matches remain. The CSV `matches` column explicitly lists all expected interpretations, so a future change that accidentally hides or introduces a match fails the tests. `resource` identifies the interpretation whose metadata the row checks.
+`inspect()` returns every match. `parse()` requires a resource hint when multiple matches remain. The CSV `matches` column lists all expected interpretations, so a change that hides or introduces a match fails the tests. `resource` identifies the interpretation whose metadata the row checks.
 
-## Draft choices and unresolved source details
+## Example conventions and limits
 
-- The job section shows `68219_MoonOrchard` but labels the descriptor required. This draft accepts both documented forms. That is a working interpretation, not a settled Studio policy.
-- The asset hierarchy lists `{type}_{Descriptor}` but illustrates a longer name with task and version. `asset` represents the short identity; `asset_version` represents the longer example.
-- The broad rule calls the descriptor optional without defining every descriptor-free entity form. This draft covers the concrete asset and shot structures shown on the page; it does not claim exhaustive coverage of that optional form.
-- Asset types and tasks use letter-only tokens as an initial assumption based on the examples. Most other tokens use ASCII alphanumeric text. These are syntax checks, not authoritative code lists; the Codes page may require different rules. The `.ma` example is preserved as supplied source data and does not add any DCC tooling.
-- Episode, sequence, shot, job number, and version stay text to preserve their exact spelling, including zeroes. Sequence and shot widths are explicitly three and four digits. This draft reads `v###` as exactly three digits; whether `v000` is permitted or versions can exceed `v999` is not settled by the page. Consequently `000` currently passes the syntax rule and `1000` does not. This differs from the minimum-width integer example in `assets.names`.
-- A frame is either decimal digits or the literal `####` sequence placeholder shown in the docs. Actual frame width and other placeholder formats are unspecified. Parsing a placeholder does not enumerate files on disk.
-- Camera descriptors start lowercase and contain letters/digits. This approximates the stated camelCase convention; it does not determine word boundaries. Suggested roles are examples rather than an exhaustive enum. Bare version descriptors and appended version tokens are rejected.
-- Render and publish locations are relative task paths from the page. Applying those templates to shots is an extrapolation from its general entity rule, covered by additional test examples. No job root, entity hierarchy path, or workfile location is invented. The version folder omits the render descriptor, matching the supplied examples.
-- Reader mappings are unspecified: the page does not define handler IDs or a complete extension vocabulary. The package's reader registry remains available for a host application to configure.
+- Jobs accept a short form such as `68219_MoonOrchard`, a description such as `68219_MoonOrchard_LaunchFilm`, and up to two extra labels such as `45sec_Festival`. Each form has its own resource definition.
+- Assets have a short identity such as `bldg_SkyDepot`. Adding a task and version produces `bldg_SkyDepot_mdl_v009`; workfiles add an extension and may include a tag. The shot examples use `NVA_086_0070` and `731_037_0260`.
+- Asset types and tasks accept letters only. Most other labels accept ASCII letters and digits. Example values illustrate the syntax rather than define a fixed vocabulary. Extensions are metadata; they do not install or invoke any DCC tooling.
+- Episode, sequence, shot, job number, and version stay text to preserve leading zeroes. Sequences require three digits, shots four, and versions exactly three. The version syntax accepts `000` and rejects `1000`. This differs from the minimum-width integer example in `assets.names`.
+- A frame is decimal digits or the literal `####` sequence placeholder. The sample frame is `2048`; other digit widths also pass. Parsing a placeholder does not enumerate files on disk.
+- Camera descriptors start lowercase and contain letters or digits, allowing labels such as `threeQuarter`. Roles are examples rather than an exhaustive enum. Bare version descriptors and appended version tokens are rejected.
+- Render and publish locations are relative task paths. Assets and shots share the same folder layout, and the version folder omits the render descriptor. Job roots, entity hierarchy paths, and workfile locations are outside this example.
+- Reader handlers and extension vocabularies belong to the host application. This example does not configure them; the package's reader registry remains available for that purpose.
 
-Run `uv run pytest tests/test_name_cases.py -k studio -v` to check every Studio table row.
+Run `uv run pytest tests/test_name_cases.py -k studio -v` to check every studio table row.
