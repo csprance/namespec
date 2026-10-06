@@ -1,8 +1,9 @@
 {
   "name": "namespec",
   "displayName": "Namespec",
-  "description": "Syntax highlighting and editing support for Namespec naming rules (.names).",
-  "version": "0.1.0",
+  "description": "Syntax highlighting and go-to-definition for Namespec naming rules (.names).",
+  "version": "0.2.0",
+  "main": "./extension.cjs",
   "publisher": "namespec-local",
   "private": true,
   "license": "UNLICENSED",
@@ -38,9 +39,11 @@
       }
     ]
   },
-  "devDependencies": {
-    "@vscode/vsce": "^4.0.0",
+  "dependencies": {
     "vscode-oniguruma": "^2.0.1",
     "vscode-textmate": "^9.3.2"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^4.0.0"
   }
 }

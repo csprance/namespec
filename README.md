@@ -21,12 +21,6 @@ The CLI writes JSON. Exit codes: `0` success, `1` invalid/ambiguous input or fai
 ```text
 spec 1
 
-resource asset_model {
-    name = "{asset_name}_{lod}_v{version}.{filetype}"
-    location = "/jobs/{job}/assets/{asset_name}/model/{lod}/{name}"
-    reader = readers[filetype]
-}
-
 job        = text matching "[A-Za-z0-9-]+" examples "commercial42"
 asset_name = text matching "[A-Za-z][A-Za-z0-9]*" examples "Donut", "Chair"
 lod        = one of "low", "mid", "high"
@@ -36,6 +30,12 @@ filetype   = one of "abc", "usd"
 readers {
     abc = "alembic"
     usd = "usd"
+}
+
+resource asset_model {
+    name = "{asset_name}_{lod}_v{version}.{filetype}"
+    location = "/jobs/{job}/assets/{asset_name}/model/{lod}/{name}"
+    reader = readers[filetype]
 }
 
 example asset_model {
@@ -54,7 +54,7 @@ reject asset_model {
 }
 ```
 
-Definitions can follow their uses. `//` starts a comment. The complete example in [examples/assets.names](examples/assets.names) includes additional negative cases.
+Read from simple to complex: field rules, reader mappings, resource templates, then executable examples. The language also allows definitions to follow their uses. `//` starts a comment. The complete example in [examples/assets.names](examples/assets.names) includes additional negative cases.
 
 ## Python API
 
@@ -115,7 +115,7 @@ Parsing and locating do no filesystem I/O. `read()` explicitly calls the registe
 
 ## Development
 
-For `.names` syntax highlighting in VS Code, install the [local Namespec language extension](editors/vscode/README.md). It highlights templates and field references, supports `//` comment toggling, and adds bracket/quote completion.
+For `.names` editing in VS Code, install the [local Namespec language extension](editors/vscode/README.md). It highlights templates and field references, supports Ctrl+click/F12 navigation to declarations, toggles `//` comments, and adds bracket/quote completion.
 
 The human-editable [name test table](tests/cases/assets.csv) lists inputs, expected resource types, validity, metadata fields, readers, locations, and errors. Adding a row adds a pytest case automatically. See [the table guide](tests/cases/README.md) for column meanings and adding another convention.
 

@@ -2,21 +2,12 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { before, test } = require("node:test");
-const oniguruma = require("vscode-oniguruma");
-const { Registry, parseRawGrammar, INITIAL } = require("vscode-textmate");
+const { INITIAL } = require("vscode-textmate");
+const { loadGrammar } = require("../grammar.cjs");
 
 let grammar;
 before(async () => {
-  await oniguruma.loadWASM(fs.readFileSync(require.resolve("vscode-oniguruma/release/onig.wasm")));
-  const grammarPath = path.join(__dirname, "../syntaxes/namespec.tmLanguage.json");
-  const registry = new Registry({
-    onigLib: Promise.resolve({
-      createOnigScanner: (patterns) => new oniguruma.OnigScanner(patterns),
-      createOnigString: (text) => new oniguruma.OnigString(text),
-    }),
-    loadGrammar: async () => parseRawGrammar(fs.readFileSync(grammarPath, "utf8"), grammarPath),
-  });
-  grammar = await registry.loadGrammar("source.namespec");
+  grammar = await loadGrammar();
 });
 
 function scopesAt(line, token) {

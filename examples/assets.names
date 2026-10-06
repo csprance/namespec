@@ -1,17 +1,6 @@
 spec 1
 
-// Read the resource first, then follow its field definitions below.
-// A versioned asset model at a particular level of detail, saved as Alembic or USD.
-// Matches: Donut_high_v004.abc or Chair_low_v001.usd
-// Rejects: Donut_ultra_v004.abc (unknown LOD) and Donut_high_v4.abc (wrong padding).
-resource asset_model {
-    name = "{asset_name}_{lod}_v{version}.{filetype}"
-    // Supply job separately when starting from a basename; the name contains no job ID.
-    // {name} expands to the filename above. Folder and filename values must agree.
-    location = "/jobs/{job}/assets/{asset_name}/model/{lod}/{name}"
-    // Select a handler ID from the extension. The host application provides its code.
-    reader = readers[filetype]
-}
+// Start with field rules and reader mappings, then combine them into a resource.
 
 // Job folder label: letters, digits, and hyphens, with no spaces or underscores.
 job        = text matching "[A-Za-z0-9-]+" examples "commercial42"
@@ -30,6 +19,18 @@ readers {
     abc = "alembic"
     usd = "usd"
     usdc = "usd"
+}
+
+// A versioned asset model at a particular level of detail, saved as Alembic or USD.
+// Matches: Donut_high_v004.abc or Chair_low_v001.usd
+// Rejects: Donut_ultra_v004.abc (unknown LOD) and Donut_high_v4.abc (wrong padding).
+resource asset_model {
+    name = "{asset_name}_{lod}_v{version}.{filetype}"
+    // Supply job separately when starting from a basename; the name contains no job ID.
+    // {name} expands to the filename above. Folder and filename values must agree.
+    location = "/jobs/{job}/assets/{asset_name}/model/{lod}/{name}"
+    // Select a handler ID from the extension. The host application provides its code.
+    reader = readers[filetype]
 }
 
 // Executable example: this name must parse to exactly the metadata shown below.

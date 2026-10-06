@@ -4,147 +4,11 @@ spec 1
 // All project names, asset names, identifiers, and sample values are illustrative.
 // See studio.md for the example conventions and their limits.
 // Separate resources express optional forms until the language supports optional groups.
-// A resource describes one kind of name. Braces refer to field rules defined below.
+// A resource describes one kind of name. Braces refer to the field rules at the top.
 // Matching checks the entire name, including literal underscores, dots, and casing.
 // Field examples illustrate values; they do not restrict the allowed vocabulary.
 
-// A job folder identifies a production by its assigned number and show/client name.
-// Matches: 68219_MoonOrchard
-// Use this short form when the job does not need a deliverable description.
-resource job_folder {
-    name = "{jobnum}_{jobname}"
-}
-// A job folder with a primary description of the work, such as LaunchFilm.
-// Matches: 68219_MoonOrchard_LaunchFilm
-resource job_folder_described {
-    name = "{jobnum}_{jobname}_{job_descriptor}"
-}
-// A described job with one extra detail, commonly a duration or delivery format.
-// Matches: 68219_MoonOrchard_LaunchFilm_45sec
-resource job_folder_one_extra {
-    name = "{jobnum}_{jobname}_{job_descriptor}_{extra1}"
-}
-// A described job with two extra details, such as duration and delivery destination.
-// Matches: 68219_KestrelQuest_SkyTrailer_45sec_Festival
-// The extra fields accept alphanumeric text; they do not enforce duration/format meanings.
-resource job_folder_two_extras {
-    name = "{jobnum}_{jobname}_{job_descriptor}_{extra1}_{extra2}"
-}
-
-// An episode identifier, either a short code or a number, with no task or version.
-// Matches: NVA or 731
-resource episode {
-    name = "{episode}"
-}
-// A sequence within an episode: episode code followed by exactly three sequence digits.
-// Matches: NVA_086 or 731_037. Rejects: NVA_86
-// A basename can also fit an asset or job rule; supply the type when context is known.
-resource sequence {
-    name = "{episode}_{sequence}"
-}
-// A shot within a sequence: episode, three sequence digits, then four shot digits.
-// Matches: NVA_086_0070 or 731_037_0260. Rejects: NVA_086_070
-// Numeric forms can also fit a described job folder, so identification may be ambiguous.
-resource shot {
-    name = "{episode}_{sequence}_{shot}"
-}
-// An asset identity: its category code and individual name, with no show prefix.
-// Matches: prop_Lantern or bldg_SkyDepot
-// Category codes are syntax-checked here; applications can supply a fixed vocabulary.
-resource asset {
-    name = "{asset_type}_{asset_name}"
-}
-// A particular task/version of an asset, without a file extension.
-// Matches: bldg_SkyDepot_mdl_v009
-// This also describes the version-folder name used by asset renders and publishes.
-resource asset_version {
-    name = "{asset_type}_{asset_name}_{task}_v{version}"
-}
-
-// An artist's asset workfile: asset identity, task, version, and file extension.
-// Matches: prop_Lantern_mdl_v017.ma
-// The extension is captured as metadata; it does not prove what the file contains.
-resource asset_workfile {
-    name = "{asset_type}_{asset_name}_{task}_v{version}.{ext}"
-}
-// An asset workfile with an extra tag after the version, such as initials or WIP.
-// Matches: prop_Lantern_mdl_v017_wip.ma. Tags cannot contain underscores.
-resource asset_workfile_tagged {
-    name = "{asset_type}_{asset_name}_{task}_v{version}_{tag}.{ext}"
-}
-// An artist's shot workfile: full shot identity, task, version, and extension.
-// Matches: NVA_086_0070_comp_v023.nk
-resource shot_workfile {
-    name = "{episode}_{sequence}_{shot}_{task}_v{version}.{ext}"
-}
-// A shot workfile with artist initials or another alphanumeric tag after the version.
-// Matches: NVA_086_0070_comp_v023_qx.nk or NVA_086_0070_comp_v023_wip.nk
-resource shot_workfile_tagged {
-    name = "{episode}_{sequence}_{shot}_{task}_v{version}_{tag}.{ext}"
-}
-
-// A single-file asset render, such as a playblast movie; there is no frame token.
-// Matches: prop_Lantern_mdl_orbitCheck_v017.mov
-// Its basename also fits asset_publish. The work/.../renders path distinguishes it.
-resource asset_render {
-    name = "{asset_type}_{asset_name}_{task}_{render_descriptor}_v{version}.{ext}"
-    // Relative to the asset's root. The version folder omits the render descriptor.
-    // {name} expands to the complete filename above; repeated fields must agree.
-    location = "work/{task}/renders/{asset_type}_{asset_name}_{task}_v{version}/{name}"
-}
-// One frame of an asset render, or the #### placeholder describing that sequence.
-// Matches: prop_Lantern_mdl_orbitCheck_v017.2048.exr
-// Also matches: prop_Lantern_mdl_orbitCheck_v017.####.exr
-// Resolves a relative path; it does not search for or enumerate frames on disk.
-resource asset_render_sequence {
-    name = "{asset_type}_{asset_name}_{task}_{render_descriptor}_v{version}.{frame}.{ext}"
-    location = "work/{task}/renders/{asset_type}_{asset_name}_{task}_v{version}/{name}"
-}
-// A single-file shot render with a description of the render before the version.
-// Matches: NVA_086_0070_comp_preview_v023.mov
-// Also fits shot_publish by name. Shot and asset renders share a folder layout.
-resource shot_render {
-    name = "{episode}_{sequence}_{shot}_{task}_{render_descriptor}_v{version}.{ext}"
-    location = "work/{task}/renders/{episode}_{sequence}_{shot}_{task}_v{version}/{name}"
-}
-// One rendered shot frame, or a #### sequence placeholder, under a version folder.
-// Matches: NVA_086_0070_comp_beauty_v023.2048.exr
-// Shot and asset sequences use the same relative folder layout.
-resource shot_render_sequence {
-    name = "{episode}_{sequence}_{shot}_{task}_{render_descriptor}_v{version}.{frame}.{ext}"
-    location = "work/{task}/renders/{episode}_{sequence}_{shot}_{task}_v{version}/{name}"
-}
-
-// An asset output prepared for publishing, with a publish-type token such as model.
-// Matches: prop_Lantern_mdl_model_v017.fbx or prop_Lantern_mdl_model_v017.abc
-// Its basename also fits asset_render; pub/.../outputs identifies the publish location.
-resource asset_publish {
-    name = "{asset_type}_{asset_name}_{task}_{publish_type}_v{version}.{ext}"
-    // Formats of the same asset/task/version share this relative version folder.
-    location = "pub/{task}/outputs/{asset_type}_{asset_name}_{task}_v{version}/{name}"
-}
-// A shot output prepared for publishing, with the publish type before the version.
-// Matches: NVA_086_0070_comp_plate_v023.exr
-// Also fits shot_render by name. Shot and asset publishes share a folder layout.
-resource shot_publish {
-    name = "{episode}_{sequence}_{shot}_{task}_{publish_type}_v{version}.{ext}"
-    location = "pub/{task}/outputs/{episode}_{sequence}_{shot}_{task}_v{version}/{name}"
-}
-
-// A camera node belonging to a shot: full shot identity, literal cam, then its role.
-// Matches: NVA_086_0070_cam_main or NVA_086_0070_cam_stereoL
-// No extension or version suffix: version the containing file/publish instead.
-resource shot_camera {
-    name = "{episode}_{sequence}_{shot}_cam_{camera_descriptor}"
-}
-// A camera node belonging to an asset, described by its viewing purpose or angle.
-// Matches: prop_Lantern_cam_turntable or prop_Lantern_cam_threeQuarter
-// Variants such as alt01 are allowed. Rejects: prop_Lantern_cam_front_v016
-resource asset_camera {
-    name = "{asset_type}_{asset_name}_cam_{camera_descriptor}"
-}
-
-// FIELD RULES: shared meanings and allowed spellings for the slots above.
+// FIELD RULES: shared meanings and allowed spellings for the templates below.
 // Identifier fields remain text so leading zeroes are not lost.
 
 // Production-assigned job number: one or more digits, with no letters or punctuation.
@@ -192,3 +56,164 @@ frame = text matching "[0-9]+|####" examples "2048", "####"
 // Suggested roles are not exhaustive. The initial regex check rejects bare v016-like roles.
 camera_descriptor = text matching "(?!v[0-9]+$)[a-z][A-Za-z0-9]*"
     examples "main", "render", "stereoL", "turntable", "threeQuarter", "alt01"
+
+// SIMPLE IDENTITIES: an episode, asset, job, sequence, or shot.
+
+// An episode identifier, either a short code or a number, with no task or version.
+// Matches: NVA or 731
+resource episode {
+    name = "{episode}"
+}
+
+// An asset identity: its category code and individual name, with no show prefix.
+// Matches: prop_Lantern or bldg_SkyDepot
+// Category codes are syntax-checked here; applications can supply a fixed vocabulary.
+resource asset {
+    name = "{asset_type}_{asset_name}"
+}
+
+// A job folder identifies a production by its assigned number and show/client name.
+// Matches: 68219_MoonOrchard
+// Use this short form when the job does not need a deliverable description.
+resource job_folder {
+    name = "{jobnum}_{jobname}"
+}
+
+// A sequence within an episode: episode code followed by exactly three sequence digits.
+// Matches: NVA_086 or 731_037. Rejects: NVA_86
+// A basename can also fit an asset or job rule; supply the type when context is known.
+resource sequence {
+    name = "{episode}_{sequence}"
+}
+
+// A shot within a sequence: episode, three sequence digits, then four shot digits.
+// Matches: NVA_086_0070 or 731_037_0260. Rejects: NVA_086_070
+// Numeric forms can also fit a described job folder, so identification may be ambiguous.
+resource shot {
+    name = "{episode}_{sequence}_{shot}"
+}
+
+// QUALIFIED NAMES: descriptions, camera roles, versions, and extra job labels.
+
+// A job folder with a primary description of the work, such as LaunchFilm.
+// Matches: 68219_MoonOrchard_LaunchFilm
+resource job_folder_described {
+    name = "{jobnum}_{jobname}_{job_descriptor}"
+}
+
+// A camera node belonging to an asset, described by its viewing purpose or angle.
+// Matches: prop_Lantern_cam_turntable or prop_Lantern_cam_threeQuarter
+// Variants such as alt01 are allowed. Rejects: prop_Lantern_cam_front_v016
+resource asset_camera {
+    name = "{asset_type}_{asset_name}_cam_{camera_descriptor}"
+}
+
+// A particular task/version of an asset, without a file extension.
+// Matches: bldg_SkyDepot_mdl_v009
+// This also describes the version-folder name used by asset renders and publishes.
+resource asset_version {
+    name = "{asset_type}_{asset_name}_{task}_v{version}"
+}
+
+// A camera node belonging to a shot: full shot identity, literal cam, then its role.
+// Matches: NVA_086_0070_cam_main or NVA_086_0070_cam_stereoL
+// No extension or version suffix: version the containing file/publish instead.
+resource shot_camera {
+    name = "{episode}_{sequence}_{shot}_cam_{camera_descriptor}"
+}
+
+// A described job with one extra detail, commonly a duration or delivery format.
+// Matches: 68219_MoonOrchard_LaunchFilm_45sec
+resource job_folder_one_extra {
+    name = "{jobnum}_{jobname}_{job_descriptor}_{extra1}"
+}
+
+// A described job with two extra details, such as duration and delivery destination.
+// Matches: 68219_KestrelQuest_SkyTrailer_45sec_Festival
+// The extra fields accept alphanumeric text; they do not enforce duration/format meanings.
+resource job_folder_two_extras {
+    name = "{jobnum}_{jobname}_{job_descriptor}_{extra1}_{extra2}"
+}
+
+// WORKFILES: identities with a task, version, extension, and optional tag.
+
+// An artist's asset workfile: asset identity, task, version, and file extension.
+// Matches: prop_Lantern_mdl_v017.ma
+// The extension is captured as metadata; it does not prove what the file contains.
+resource asset_workfile {
+    name = "{asset_type}_{asset_name}_{task}_v{version}.{ext}"
+}
+
+// An artist's shot workfile: full shot identity, task, version, and extension.
+// Matches: NVA_086_0070_comp_v023.nk
+resource shot_workfile {
+    name = "{episode}_{sequence}_{shot}_{task}_v{version}.{ext}"
+}
+
+// An asset workfile with an extra tag after the version, such as initials or WIP.
+// Matches: prop_Lantern_mdl_v017_wip.ma. Tags cannot contain underscores.
+resource asset_workfile_tagged {
+    name = "{asset_type}_{asset_name}_{task}_v{version}_{tag}.{ext}"
+}
+
+// A shot workfile with artist initials or another alphanumeric tag after the version.
+// Matches: NVA_086_0070_comp_v023_qx.nk or NVA_086_0070_comp_v023_wip.nk
+resource shot_workfile_tagged {
+    name = "{episode}_{sequence}_{shot}_{task}_v{version}_{tag}.{ext}"
+}
+
+// FILES AND LOCATIONS: names paired with relative render or publish paths.
+
+// A single-file asset render, such as a playblast movie; there is no frame token.
+// Matches: prop_Lantern_mdl_orbitCheck_v017.mov
+// Its basename also fits asset_publish. The work/.../renders path distinguishes it.
+resource asset_render {
+    name = "{asset_type}_{asset_name}_{task}_{render_descriptor}_v{version}.{ext}"
+    // Relative to the asset's root. The version folder omits the render descriptor.
+    // {name} expands to the complete filename above; repeated fields must agree.
+    location = "work/{task}/renders/{asset_type}_{asset_name}_{task}_v{version}/{name}"
+}
+
+// An asset output prepared for publishing, with a publish-type token such as model.
+// Matches: prop_Lantern_mdl_model_v017.fbx or prop_Lantern_mdl_model_v017.abc
+// Its basename also fits asset_render; pub/.../outputs identifies the publish location.
+resource asset_publish {
+    name = "{asset_type}_{asset_name}_{task}_{publish_type}_v{version}.{ext}"
+    // Formats of the same asset/task/version share this relative version folder.
+    location = "pub/{task}/outputs/{asset_type}_{asset_name}_{task}_v{version}/{name}"
+}
+
+// A single-file shot render with a description of the render before the version.
+// Matches: NVA_086_0070_comp_preview_v023.mov
+// Also fits shot_publish by name. Shot and asset renders share a folder layout.
+resource shot_render {
+    name = "{episode}_{sequence}_{shot}_{task}_{render_descriptor}_v{version}.{ext}"
+    location = "work/{task}/renders/{episode}_{sequence}_{shot}_{task}_v{version}/{name}"
+}
+
+// A shot output prepared for publishing, with the publish type before the version.
+// Matches: NVA_086_0070_comp_plate_v023.exr
+// Also fits shot_render by name. Shot and asset publishes share a folder layout.
+resource shot_publish {
+    name = "{episode}_{sequence}_{shot}_{task}_{publish_type}_v{version}.{ext}"
+    location = "pub/{task}/outputs/{episode}_{sequence}_{shot}_{task}_v{version}/{name}"
+}
+
+// FRAME SEQUENCES: render paths with a frame number or sequence placeholder.
+
+// One frame of an asset render, or the #### placeholder describing that sequence.
+// Matches: prop_Lantern_mdl_orbitCheck_v017.2048.exr
+// Also matches: prop_Lantern_mdl_orbitCheck_v017.####.exr
+// Resolves a relative path; it does not search for or enumerate frames on disk.
+resource asset_render_sequence {
+    name = "{asset_type}_{asset_name}_{task}_{render_descriptor}_v{version}.{frame}.{ext}"
+    location = "work/{task}/renders/{asset_type}_{asset_name}_{task}_v{version}/{name}"
+}
+
+// One rendered shot frame, or a #### sequence placeholder, under a version folder.
+// Matches: NVA_086_0070_comp_beauty_v023.2048.exr
+// Shot and asset sequences use the same relative folder layout.
+resource shot_render_sequence {
+    name = "{episode}_{sequence}_{shot}_{task}_{render_descriptor}_v{version}.{frame}.{ext}"
+    location = "work/{task}/renders/{episode}_{sequence}_{shot}_{task}_v{version}/{name}"
+}

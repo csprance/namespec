@@ -2,7 +2,7 @@
 
 [studio.names](studio.names) demonstrates a small production naming system using fictional projects, assets, identifiers, and sample values. MoonOrchard is an imaginary show, KestrelQuest an imaginary adventure series, and PixelTea2042 an imaginary campaign. These examples are teaching data, not a production studio's naming policy.
 
-The templates come first, followed by reusable field rules. Optional tags, job suffixes, and frame components use separate resource definitions because Namespec does not yet support optional template groups.
+Read from simple to complex: reusable field rules, simple identities, qualified names, workfiles, files with locations, then frame sequences. Optional tags, job suffixes, and frame components use separate resource definitions because Namespec does not yet support optional template groups.
 
 ## Editable examples
 
