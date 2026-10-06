@@ -1,0 +1,79 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Namespec",
+  "scopeName": "source.namespec",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#templates" },
+    { "include": "#strings" },
+    {
+      "match": "\\b(resource|example|reject)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "keyword.declaration.namespec" },
+        "2": { "name": "entity.name.type.namespec" }
+      }
+    },
+    { "match": "\\b(?:text|integer)\\b", "name": "storage.type.namespec" },
+    {
+      "match": "\\b(?:spec|matching|examples|minimum|padded|to|digits|one|of|readers|expect)\\b",
+      "name": "keyword.control.namespec"
+    },
+    {
+      "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*=)",
+      "name": "variable.other.property.namespec"
+    },
+    { "match": "\\b[0-9]+\\b", "name": "constant.numeric.namespec" },
+    { "match": "=", "name": "keyword.operator.assignment.namespec" },
+    { "match": "[{}\\[\\]]", "name": "punctuation.section.braces.namespec" },
+    { "match": ",", "name": "punctuation.separator.namespec" },
+    { "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b", "name": "variable.other.namespec" }
+  ],
+  "repository": {
+    "comments": {
+      "name": "comment.line.double-slash.namespec",
+      "begin": "//",
+      "end": "$"
+    },
+    "templates": {
+      "name": "meta.assignment.template.namespec",
+      "begin": "\\b(name|location)\\s*(=)\\s*([\"'])",
+      "beginCaptures": {
+        "1": { "name": "variable.other.property.namespec" },
+        "2": { "name": "keyword.operator.assignment.namespec" },
+        "3": { "name": "punctuation.definition.string.begin.namespec" }
+      },
+      "end": "\\3",
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.namespec" } },
+      "contentName": "string.quoted.template.namespec",
+      "patterns": [
+        { "include": "#escapes" },
+        { "match": "\\{\\{|\\}\\}", "name": "constant.character.escape.namespec" },
+        {
+          "match": "(\\{)([A-Za-z_][A-Za-z0-9_]*)(\\})",
+          "captures": {
+            "1": { "name": "punctuation.definition.interpolation.begin.namespec" },
+            "2": { "name": "variable.parameter.namespec" },
+            "3": { "name": "punctuation.definition.interpolation.end.namespec" }
+          }
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.namespec",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [{ "include": "#escapes" }]
+        },
+        {
+          "name": "string.quoted.single.namespec",
+          "begin": "'",
+          "end": "'",
+          "patterns": [{ "include": "#escapes" }]
+        }
+      ]
+    },
+    "escapes": { "match": "\\\\.", "name": "constant.character.escape.namespec" }
+  }
+}

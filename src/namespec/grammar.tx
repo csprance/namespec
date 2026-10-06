@@ -1,0 +1,40 @@
+Model:
+    'spec' version=INT
+    declarations*=Declaration
+;
+Declaration: Resource | Field | Readers | Example | Rejection;
+Resource:
+    'resource' name=ID '{'
+        'name' '=' template=STRING
+        ('location' '=' location=STRING)?
+        ('reader' '=' 'readers' '[' reader_field=ID ']')?
+    '}'
+;
+Field: name=ID '=' rule=FieldRule;
+FieldRule: TextRule | IntegerRule | EnumRule;
+TextRule:
+    'text' 'matching' pattern=STRING
+    ('examples' samples+=STRING[','])?
+;
+IntegerRule:
+    'integer' 'minimum' minimum=INT
+    ('padded' 'to' width=INT 'digits')?
+;
+EnumRule: 'one' 'of' values+=STRING[','];
+Readers: 'readers' '{' entries*=ReaderEntry '}';
+ReaderEntry: extension=ID '=' handler=STRING;
+Example:
+    'example' resource=ID '{'
+        'input' '=' input=STRING
+        'expect' '{' fields*=ExpectedField '}'
+    '}'
+;
+ExpectedField: name=ID '=' value=Value;
+Value: STRING | INT;
+Rejection:
+    'reject' resource=ID '{'
+        'input' '=' input=STRING
+        'expect' '=' code=STRING
+    '}'
+;
+Comment: /\/\/[^\n]*/;

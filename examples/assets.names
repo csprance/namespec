@@ -1,0 +1,62 @@
+spec 1
+
+// Read the resource first, then follow its field definitions below.
+// A versioned asset model at a particular level of detail, saved as Alembic or USD.
+// Matches: Donut_high_v004.abc or Chair_low_v001.usd
+// Rejects: Donut_ultra_v004.abc (unknown LOD) and Donut_high_v4.abc (wrong padding).
+resource asset_model {
+    name = "{asset_name}_{lod}_v{version}.{filetype}"
+    // Supply job separately when starting from a basename; the name contains no job ID.
+    // {name} expands to the filename above. Folder and filename values must agree.
+    location = "/jobs/{job}/assets/{asset_name}/model/{lod}/{name}"
+    // Select a handler ID from the extension. The host application provides its code.
+    reader = readers[filetype]
+}
+
+// Job folder label: letters, digits, and hyphens, with no spaces or underscores.
+job        = text matching "[A-Za-z0-9-]+" examples "commercial42"
+// Asset identity: starts with a letter, then letters/digits. Examples are not a whitelist.
+asset_name = text matching "[A-Za-z][A-Za-z0-9]*" examples "Donut", "Chair"
+// Level of detail: exactly one of these three lowercase spellings.
+lod        = one of "low", "mid", "high"
+// Positive version number, returned as an integer: v004 becomes 4.
+// Padding is minimum width, so version 1000 is also valid; v4 and v0004 are not canonical.
+version    = integer minimum 1 padded to 3 digits
+// Accepted file extensions without the dot. This list is exhaustive for this resource.
+filetype   = one of "abc", "usd", "usdc"
+
+// Extension-to-handler mapping. Parsing selects an ID; read() calls a registered handler.
+readers {
+    abc = "alembic"
+    usd = "usd"
+    usdc = "usd"
+}
+
+// Executable example: this name must parse to exactly the metadata shown below.
+example asset_model {
+    input = "Donut_high_v004.abc"
+    expect {
+        asset_name = "Donut"
+        lod = "high"
+        version = 4
+        filetype = "abc"
+    }
+}
+
+// The structure fits, but ultra is not one of the allowed levels of detail.
+reject asset_model {
+    input = "Donut_ultra_v004.abc"
+    expect = "invalid_field"
+}
+
+// The v prefix is present, but the required version digits are missing.
+reject asset_model {
+    input = "Donut_high_v.abc"
+    expect = "missing_field"
+}
+
+// Version 4 must be spelled 004 in a filename to satisfy the padding rule.
+reject asset_model {
+    input = "Donut_high_v4.abc"
+    expect = "noncanonical_field"
+}

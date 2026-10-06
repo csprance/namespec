@@ -1,0 +1,13 @@
+case,schema,input,source,resource,valid,matches,field.episode,field.sequence,field.shot,field.asset_type,field.asset_name,field.task,field.version,reader,location,diagnostics,notes
+episode_alpha,studio,NVA,name,episode,true,,NVA,,,,,,,,,,
+episode_numeric,studio,731,name,episode,true,,731,,,,,,,,,,
+sequence_alpha,studio,NVA_086,name,sequence,true,sequence;asset,NVA,086,,,,,,,,,Without asset code vocabulary this can also be an asset.
+sequence_numeric,studio,731_037,name,sequence,true,sequence;job_folder,731,037,,,,,,,,,Could also be a numeric job and job name.
+shot_alpha,studio,NVA_086_0070,name,shot,true,,NVA,086,0070,,,,,,,,
+shot_numeric,studio,731_037_0260,name,shot,true,shot;job_folder_described,731,037,0260,,,,,,,,
+asset_identity,studio,bldg_SkyDepot,name,asset,true,,,,,bldg,SkyDepot,,,,,,Asset hierarchy template without the task/version suffix.
+asset_version,studio,bldg_SkyDepot_mdl_v009,name,asset_version,true,,,,,bldg,SkyDepot,mdl,009,,,,
+short_sequence,studio,NVA_86,name,sequence,false,,NVA,,,,,,,,,invalid_field:sequence,
+short_shot,studio,NVA_086_070,name,shot,false,,NVA,086,,,,,,,,invalid_field:shot,
+empty_shot,studio,NVA_086_,name,shot,false,,NVA,086,,,,,,,,missing_field:shot,
+absent_shot_slot,studio,NVA_086,name,shot,false,,,,,,,,,,,pattern_mismatch,

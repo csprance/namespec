@@ -1,0 +1,46 @@
+{
+  "name": "namespec",
+  "displayName": "Namespec",
+  "description": "Syntax highlighting and editing support for Namespec naming rules (.names).",
+  "version": "0.1.0",
+  "publisher": "namespec-local",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.cjs",
+    "package": "vsce package --allow-missing-repository --skip-license"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "namespec",
+        "aliases": [
+          "Namespec",
+          "namespec"
+        ],
+        "extensions": [
+          ".names"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "namespec",
+        "scopeName": "source.namespec",
+        "path": "./syntaxes/namespec.tmLanguage.json"
+      }
+    ]
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^4.0.0",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
+  }
+}

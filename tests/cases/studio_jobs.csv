@@ -1,0 +1,9 @@
+case,schema,input,source,resource,valid,matches,field.jobnum,field.jobname,field.job_descriptor,field.extra1,field.extra2,reader,location,diagnostics,notes
+short_job,studio,68219_MoonOrchard,name,job_folder,true,,68219,MoonOrchard,,,,,,,Short job form without a descriptor.
+described_job,studio,68219_MoonOrchard_LaunchFilm,name,job_folder_described,true,,68219,MoonOrchard,LaunchFilm,,,,,,Additional example of the described form.
+one_optional_part,studio,68219_MoonOrchard_LaunchFilm_45sec,name,job_folder_one_extra,true,,68219,MoonOrchard,LaunchFilm,45sec,,,,,
+adventure_delivery,studio,68219_KestrelQuest_SkyTrailer_45sec_Festival,name,job_folder_two_extras,true,,68219,KestrelQuest,SkyTrailer,45sec,Festival,,,,
+campaign_delivery,studio,68219_PixelTea2042_LaunchFilm_45sec_Festival,name,job_folder_two_extras,true,,68219,PixelTea2042,LaunchFilm,45sec,Festival,,,,
+nonnumeric_job,studio,ABC_MoonOrchard,name,job_folder,false,,,MoonOrchard,,,,,,invalid_field:jobnum,
+missing_job_name,studio,68219_,name,job_folder,false,,68219,,,,,,,missing_field:jobname,
+space_in_job,studio,68219_Pixel Tea,name,job_folder,false,,68219,,,,,,,invalid_field:jobname,

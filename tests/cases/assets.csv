@@ -1,0 +1,31 @@
+case,input,source,resource,valid,field.asset_name,field.lod,field.version:int,field.filetype,field.job,context.job,reader,location,diagnostics,notes
+donut_alembic,Donut_high_v004.abc,name,asset_model,true,Donut,high,4,abc,,commercial42,alembic,/jobs/commercial42/assets/Donut/model/high/Donut_high_v004.abc,,Standard model: version becomes an integer
+chair_usd,Chair_low_v001.usd,name,asset_model,true,Chair,low,1,usd,,show17,usd,/jobs/show17/assets/Chair/model/low/Chair_low_v001.usd,,Lowest LOD and first version
+chair_usdc,Chair_mid_v012.usdc,name,asset_model,true,Chair,mid,12,usdc,,show17,usd,/jobs/show17/assets/Chair/model/mid/Chair_mid_v012.usdc,,USD and USDC select the same reader
+camelcase_asset,FireHydrant_high_v099.abc,name,asset_model,true,FireHydrant,high,99,abc,,commercial42,alembic,/jobs/commercial42/assets/FireHydrant/model/high/FireHydrant_high_v099.abc,,Multiword assets use camel case
+numbered_asset,Chair2_mid_v999.usd,name,asset_model,true,Chair2,mid,999,usd,,show17,usd,/jobs/show17/assets/Chair2/model/mid/Chair2_mid_v999.usd,,Digits allowed after the first asset letter
+four_digit_version,Donut_high_v1000.abc,name,asset_model,true,Donut,high,1000,abc,,commercial42,alembic,/jobs/commercial42/assets/Donut/model/high/Donut_high_v1000.abc,,Padding is a minimum width
+lowercase_asset,donut_low_v002.abc,name,asset_model,true,donut,low,2,abc,,job-42,alembic,/jobs/job-42/assets/donut/model/low/donut_low_v002.abc,,Preserve case and allow hyphens in job codes
+unknown_lod,Donut_ultra_v004.abc,name,asset_model,false,Donut,,4,abc,,,,,invalid_field:lod,Keep good fields but omit the invalid LOD
+uppercase_lod,Donut_HIGH_v004.abc,name,asset_model,false,Donut,,4,abc,,,,,invalid_field:lod,Enum spelling is case sensitive
+empty_version,Donut_high_v.abc,name,asset_model,false,Donut,high,,abc,,,,,missing_field:version,Version slot exists but has no value
+short_version,Donut_high_v4.abc,name,asset_model,false,Donut,high,,abc,,,,,noncanonical_field:version,Version requires at least three digits
+overpadded_version,Donut_high_v0004.abc,name,asset_model,false,Donut,high,,abc,,,,,noncanonical_field:version,Four is canonically written 004
+word_version,Donut_high_vzero.abc,name,asset_model,false,Donut,high,,abc,,,,,invalid_field:version,Version must contain digits
+zero_version,Donut_high_v000.abc,name,asset_model,false,Donut,high,,abc,,,,,invalid_field:version,Minimum version is one
+unicode_digits,Donut_high_v００４.abc,name,asset_model,false,Donut,high,,abc,,,,,invalid_field:version,Only ASCII digits are valid
+unknown_filetype,Donut_high_v004.fbx,name,asset_model,false,Donut,high,4,,,,,,invalid_field:filetype,FBX is not declared in this convention
+empty_asset,_high_v004.abc,name,asset_model,false,,high,4,abc,,,,,missing_field:asset_name,Asset slot is present but empty
+numeric_asset,123_high_v004.abc,name,asset_model,false,,high,4,abc,,,,,invalid_field:asset_name,Asset must start with a letter
+multiple_bad_fields,Donut_ultra_vzero.fbx,name,asset_model,false,Donut,,,,,,,,invalid_field:lod;invalid_field:version;invalid_field:filetype,Report every aligned invalid field
+trailing_newline,Donut_high_v004.abc<LF>,name,asset_model,false,,,,,,,,,pattern_mismatch,Visible LF marker represents a real newline
+unexpected_directory,prefix/Donut_high_v004.abc,name,asset_model,false,,,,,,,,,pattern_mismatch,A basename must not contain a directory
+missing_version_slot,Donut_high.abc,name,asset_model,false,,,,,,,,,pattern_mismatch,Do not guess fields when the whole version slot is absent
+extra_separator,Donut_extra_high_v004.abc,name,asset_model,false,,,,,,,,,pattern_mismatch,Underscores cannot occur inside asset names
+empty_input,,name,asset_model,false,,,,,,,,,pattern_mismatch,An empty string is not a name
+full_alembic_path,/jobs/commercial42/assets/Donut/model/high/Donut_high_v004.abc,location,asset_model,true,Donut,high,4,abc,commercial42,,alembic,/jobs/commercial42/assets/Donut/model/high/Donut_high_v004.abc,,Full paths supply job context
+full_usd_path,/jobs/show17/assets/Chair/model/low/Chair_low_v001.usd,location,asset_model,true,Chair,low,1,usd,show17,,usd,/jobs/show17/assets/Chair/model/low/Chair_low_v001.usd,,Parse the location and reconstruct it exactly
+conflicting_asset,/jobs/job1/assets/Donut/model/high/Chair_high_v004.abc,location,asset_model,false,,high,4,abc,job1,,,,conflicting_field:asset_name,Folder and filename disagree about the asset
+conflicting_lod,/jobs/job1/assets/Donut/model/high/Donut_low_v004.abc,location,asset_model,false,Donut,,4,abc,job1,,,,conflicting_field:lod,Folder and filename disagree about LOD
+conflicting_asset_and_lod,/jobs/job1/assets/Donut/model/high/Chair_low_v004.abc,location,asset_model,false,,,4,abc,job1,,,,conflicting_field:asset_name;conflicting_field:lod,Omit both conflicting fields from recovered metadata
+invalid_job,/jobs/job!/assets/Donut/model/high/Donut_high_v004.abc,location,asset_model,false,Donut,high,4,abc,,,,,invalid_field:job,Job spelling is validated independently
