@@ -11,11 +11,15 @@ function tokensFor(source, grammar) {
     state = result.ruleStack;
     for (const token of result.tokens) {
       const slot = token.scopes.includes("variable.parameter.namespec");
-      if (!slot && token.scopes.some((scope) => /^(comment|string|constant.character)/.test(scope))) {
+      if (token.scopes.some((scope) => scope.startsWith("comment"))) continue;
+      const text = line.slice(token.startIndex, token.endIndex);
+      // Keep opaque string spans for complete declaration previews, but never
+      // interpret their contents as declarations or block delimiters.
+      if (!slot && token.scopes.some((scope) => /^(string|constant.character|punctuation.definition.string)/.test(scope))) {
+        tokens.push({ text, start: offset + token.startIndex, end: offset + token.startIndex + text.length, literal: true });
         continue;
       }
-      const text = line.slice(token.startIndex, token.endIndex);
-      for (const match of text.matchAll(/[A-Za-z_][A-Za-z0-9_]*|[{}\[\]=]/g)) {
+      for (const match of text.matchAll(/[A-Za-z_][A-Za-z0-9_]*|-?[0-9]+|[{}\[\]=,]/g)) {
         const start = offset + token.startIndex + match.index;
         tokens.push({ text: match[0], start, end: start + match[0].length, slot });
       }
@@ -31,12 +35,20 @@ function indexDefinitions(source, grammar) {
   const references = [];
   const stack = [];
   let pending;
+  let field;
   const declare = (key, token) => {
     const targets = declarations.get(key) ?? [];
     targets.push(token);
     declarations.set(key, targets);
   };
   const refer = (token, key, owner) => references.push({ token, key, owner });
+  const finishField = (end) => {
+    if (field) field.rangeEnd = end;
+    field = undefined;
+  };
+  const finishTemplate = (context, end) => {
+    if (context?.template && context.template.rangeEnd === undefined) context.template.rangeEnd = end;
+  };
 
   // Only index declaration/reference sites; validation remains the Python
   // package's job. Keeping block context also tolerates a file being edited.
@@ -45,6 +57,7 @@ function indexDefinitions(source, grammar) {
     const next = tokens[i + 1];
     const after = tokens[i + 2];
     const context = stack.at(-1);
+    if (token.literal) continue;
     if (token.slot) {
       if (context?.kind === "resource") {
         refer(token, `field:${token.text}`, token.text === "name" ? context : undefined);
@@ -57,24 +70,41 @@ function indexDefinitions(source, grammar) {
       continue;
     }
     if (token.text === "}") {
+      if (context?.target) context.target.rangeEnd = token.end;
+      finishTemplate(context, tokens[i - 1]?.end ?? token.start);
       stack.pop();
       pending = undefined;
       continue;
     }
     if (!context) {
       if (["resource", "example", "reject"].includes(token.text) && after?.text === "{") {
-        if (token.text === "resource") declare(`resource:${next.text}`, next);
-        else refer(next, `resource:${next.text}`);
-        pending = { kind: token.text };
+        finishField(tokens[i - 1]?.end ?? token.start);
+        if (token.text === "resource") {
+          next.rangeStart = token.start;
+          declare(`resource:${next.text}`, next);
+        }
+        refer(next, `resource:${next.text}`);
+        pending = { kind: token.text, target: token.text === "resource" ? next : undefined };
         i++;
       } else if (token.text === "readers" && next?.text === "{") {
+        finishField(tokens[i - 1]?.end ?? token.start);
         declare("readers", token);
-        pending = { kind: "readers" };
+        refer(token, "readers");
+        pending = { kind: "readers", target: token };
       } else if (next?.text === "=" && ["text", "integer", "one"].includes(after?.text)) {
+        finishField(tokens[i - 1]?.end ?? token.start);
+        field = token;
         declare(`field:${token.text}`, token);
+        refer(token, `field:${token.text}`);
       }
     } else if (context.kind === "resource") {
-      if (token.text === "name" && next?.text === "=") context.template = token;
+      if (["name", "location", "reader"].includes(token.text) && next?.text === "=") {
+        finishTemplate(context, tokens[i - 1]?.end ?? token.start);
+        if (token.text === "name") {
+          context.template = token;
+          refer(token, "", context);
+        }
+      }
       if (token.text === "readers" && next?.text === "[") {
         refer(token, "readers");
         if (after && after.text !== "]") refer(after, `field:${after.text}`);
@@ -84,6 +114,11 @@ function indexDefinitions(source, grammar) {
     } else if (context.kind === "expect" && next?.text === "=") {
       refer(token, `field:${token.text}`);
     }
+  }
+  finishField(tokens.at(-1)?.end ?? source.length);
+  for (const context of stack) {
+    if (context.target) context.target.rangeEnd = source.length;
+    finishTemplate(context, source.length);
   }
 
   return (offset) => {

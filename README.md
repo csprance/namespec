@@ -115,7 +115,7 @@ Parsing and locating do no filesystem I/O. `read()` explicitly calls the registe
 
 ## Development
 
-For `.names` editing in VS Code, install the [local Namespec language extension](editors/vscode/README.md). It highlights templates and field references, supports Ctrl+click/F12 navigation to declarations, toggles `//` comments, and adds bracket/quote completion.
+For `.names` editing in VS Code, install the [local Namespec language extension](editors/vscode/README.md). It provides highlighted declaration hovers, Ctrl+click/F12 navigation and VS Code's built-in Peek Definition (Alt+F12 on Windows), plus syntax highlighting, `//` comment toggling and bracket/quote completion.
 
 The human-editable [name test table](tests/cases/assets.csv) lists inputs, expected resource types, validity, metadata fields, readers, locations, and errors. Adding a row adds a pytest case automatically. See [the table guide](tests/cases/README.md) for column meanings and adding another convention.
 

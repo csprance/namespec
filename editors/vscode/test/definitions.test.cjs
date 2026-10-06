@@ -86,3 +86,38 @@ test("every placeholder in both shipped examples has a declaration", () => {
     }
   }
 });
+
+test("preview ranges contain multiline values without neighboring declarations or comments", () => {
+  const declaration = 'role = text matching "[a-z]+"\r\n    examples "main", "detail"';
+  const source = declaration + '\r\n// next field\r\next = one of "abc"\r\n' +
+    'resource item { name = "{role}.{ext}" }';
+  for (const offset of [1, source.indexOf('{role}') + 2]) {
+    const [{ target }] = indexDefinitions(source, grammar)(offset);
+    assert.equal(source.slice(target.rangeStart ?? target.start, target.rangeEnd), declaration);
+  }
+  const enumTarget = indexDefinitions(source, grammar)(source.indexOf('{ext}') + 2)[0].target;
+  assert.equal(source.slice(enumTarget.start, enumTarget.rangeEnd), 'ext = one of "abc"');
+});
+
+test("resource, reader and built-in name previews have distinct complete ranges", () => {
+  const resource = 'resource model {\n name = "{asset}"\n location = "/{name}"\n reader = readers[ext]\n}';
+  const readers = 'readers {\n abc = "alembic"\n}';
+  const source = 'asset = text matching "[a-z]+"\next = one of "abc"\n' + resource + '\n' + readers +
+    '\nexample model { input = "chair" expect { asset = "chair" } }';
+  const preview = (offset) => {
+    const { target } = indexDefinitions(source, grammar)(offset)[0];
+    return source.slice(target.rangeStart ?? target.start, target.rangeEnd);
+  };
+  assert.equal(preview(source.indexOf('example model') + 9), resource);
+  assert.equal(preview(source.indexOf('readers[ext]') + 2), readers);
+  assert.equal(preview(source.indexOf('{name}') + 2), 'name = "{asset}"');
+});
+
+test("preview includes final numeric constraints and tolerates incomplete blocks", () => {
+  const source = 'resource item { name = "{version}" }\nversion = integer minimum 1 padded to 3 digits\n// trailing note';
+  const { target } = indexDefinitions(source, grammar)(source.indexOf('{version}') + 2)[0];
+  assert.equal(source.slice(target.start, target.rangeEnd), 'version = integer minimum 1 padded to 3 digits');
+  const unfinished = 'example model { input = "x" }\nresource model { name = "{unknown}"';
+  const partial = indexDefinitions(unfinished, grammar)(unfinished.indexOf('model') + 1)[0].target;
+  assert.equal(unfinished.slice(partial.rangeStart, partial.rangeEnd), 'resource model { name = "{unknown}"');
+});
