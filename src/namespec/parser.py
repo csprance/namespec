@@ -17,11 +17,15 @@ from .models import (
     Definition,
     ExampleSpec,
     FieldSpec,
+    NameSpecError,
     ResourceSpec,
     check_root,
     fail,
+    located,
     validate_field_spec,
 )
+
+Span = tuple[int, int]
 
 TOKENS = re.compile(
     r"""
@@ -68,11 +72,7 @@ def tokenize(source: str) -> list[Token]:
         if match is None:
             character = source[position]
             what = "unterminated string" if character in "\"'" else f"unexpected {character!r}"
-            fail(
-                "syntax_error",
-                f"line {line}, column {position - line_start + 1}: {what}.",
-                span=(position, position + 1),
-            )
+            fail("syntax_error", f"{what}.", span=(position, position + 1))
         kind = match.lastgroup
         text = match.group()
         if kind == "id":
@@ -126,6 +126,7 @@ class Parser:
         self.roots: dict[str, str] = {}
         self.normalize: dict[str, str] = {}
         self.examples: list[ExampleSpec] = []
+        self.spans: dict[tuple[str | int, ...], Span] = {}
 
     # Token helpers -----------------------------------------------------------------------
 
@@ -138,12 +139,15 @@ class Parser:
             self.position += 1
         return token
 
+    def since(self, token: Token) -> Span:
+        """From the start of ``token`` to the end of the last token read."""
+        return token.start, self.tokens[self.position - 1].end
+
     def error(self, expected: str, token: Token | None = None) -> None:
         token = token or self.peek()
         fail(
             "syntax_error",
-            f"line {token.line}, column {token.column}: expected {expected}, "
-            f"found {token.describe()}.",
+            f"expected {expected}, found {token.describe()}.",
             span=(token.start, token.end),
         )
 
@@ -171,11 +175,11 @@ class Parser:
     def identifier(self, what: str = "a name") -> str:
         return self.expect("id", expected=what).value
 
-    def strings(self) -> list[str]:
-        values = [self.string()]
+    def strings(self) -> list[Token]:
+        tokens = [self.expect("string", expected="a string")]
         while self.accept("punct", ","):
-            values.append(self.string())
-        return values
+            tokens.append(self.expect("string", expected="a string"))
+        return tokens
 
     def value(self) -> str | int:
         token = self.peek()
@@ -187,27 +191,33 @@ class Parser:
 
     def parse(self) -> Definition:
         self.keyword("spec")
-        version = self.expect("int", expected="a specification version").value
-        if version != SPEC_VERSION:
-            fail("unsupported_spec", f"Unsupported specification version: {version}.")
+        version_token = self.expect("int", expected="a specification version")
+        if version_token.value != SPEC_VERSION:
+            fail(
+                "unsupported_spec",
+                f"Unsupported specification version: {version_token.value}.",
+                span=(version_token.start, version_token.end),
+            )
         while self.peek().kind != "eof":
             self.declaration()
         if not self.resources:
             fail("missing_resource", "Define at least one resource.")
-        for example in self.examples:
+        for index, example in enumerate(self.examples):
             if example.resource not in self.resources:
                 fail(
                     "unknown_resource",
                     f"Example references unknown resource {example.resource!r}.",
+                    span=self.spans[("example", index, "resource")],
                 )
         return Definition(
-            version,
+            version_token.value,
             self.fields,
             self.resources,
             self.readers,
             tuple(self.examples),
             self.roots,
             self.normalize,
+            self.spans,
         )
 
     def declaration(self) -> None:
@@ -232,18 +242,21 @@ class Parser:
         if name in BLOCK_KEYWORDS or name == "meta":
             fail(
                 "reserved_field",
-                f"line {name_token.line}: {name!r} is a keyword and cannot name a field.",
+                f"{name!r} is a keyword and cannot name a field.",
                 span=(name_token.start, name_token.end),
             )
         self.punct("=")
         token = self.peek()
+        samples: list[Token] = []
         if token.kind == "string":
             spec = FieldSpec(name, "composite", template=self.advance().value)
         elif self.accept("id", "text"):
             self.keyword("matching")
             pattern = self.string("a pattern")
             samples = self.strings() if self.accept("id", "examples") else []
-            spec = FieldSpec(name, "text", pattern=pattern, samples=tuple(samples))
+            spec = FieldSpec(
+                name, "text", pattern=pattern, samples=tuple(item.value for item in samples)
+            )
         elif self.accept("id", "integer"):
             self.keyword("minimum")
             minimum = self.expect("int", expected="a minimum").value
@@ -255,17 +268,21 @@ class Parser:
             spec = FieldSpec(name, "integer", minimum=minimum, width=width)
         elif self.accept("id", "one"):
             self.keyword("of")
-            spec = FieldSpec(name, "enum", choices=tuple(self.strings()))
+            spec = FieldSpec(name, "enum", choices=tuple(item.value for item in self.strings()))
         else:
             self.error(
                 'a field rule: text matching "...", integer minimum N, one of "...", or a template'
             )
-        validate_field_spec(spec)
-        insert(self.fields, name, spec)
+        span = self.since(name_token)
+        with located(span):
+            validate_field_spec(spec, [(item.start, item.end) for item in samples])
+        insert(self.fields, name, spec, (name_token.start, name_token.end))
+        self.spans[("field", name)] = span
 
     def resource(self) -> None:
         self.keyword("resource")
-        name = self.identifier("a resource name")
+        name_token = self.expect("id", expected="a resource name")
+        name = name_token.value
         self.punct("{")
         entries: dict[str, Any] = {}
         metadata: dict[str, Any] = {}
@@ -277,7 +294,7 @@ class Parser:
             if key in entries or (key == "meta" and metadata):
                 fail(
                     "duplicate_definition",
-                    f"line {key_token.line}: resource {name!r} repeats {key!r}.",
+                    f"Resource {name!r} repeats {key!r}.",
                     span=(key_token.start, key_token.end),
                 )
             self.advance()
@@ -293,7 +310,7 @@ class Parser:
             elif key == "meta":
                 self.punct("{")
                 while not self.accept("punct", "}"):
-                    meta_key = self.identifier("a metadata key or '}'")
+                    meta_token = self.expect("id", expected="a metadata key or '}'")
                     self.punct("=")
                     if self.accept("punct", "["):
                         items: list[str | int] = []
@@ -302,14 +319,21 @@ class Parser:
                             while self.accept("punct", ","):
                                 items.append(self.value())
                             self.punct("]")
-                        insert(metadata, meta_key, tuple(items))
+                        value: Any = tuple(items)
                     else:
-                        insert(metadata, meta_key, self.value())
+                        value = self.value()
+                    insert(metadata, meta_token.value, value, self.since(meta_token))
                 entries["meta"] = True
             else:
                 self.error("name, location, reader, meta or '}'", key_token)
+            self.spans[("resource", name, key)] = self.since(key_token)
+        name_span = (name_token.start, name_token.end)
         if "name" not in entries and "location" not in entries:
-            fail("invalid_resource", f"Resource {name!r} needs a name or a location.")
+            fail(
+                "invalid_resource",
+                f"Resource {name!r} needs a name or a location.",
+                span=name_span,
+            )
         insert(
             self.resources,
             name,
@@ -320,7 +344,9 @@ class Parser:
                 entries.get("reader"),
                 metadata,
             ),
+            name_span,
         )
+        self.spans[("resource", name)] = name_span
 
     def block(self, kind: str) -> None:
         self.advance()
@@ -331,19 +357,21 @@ class Parser:
             key = self.identifier("an entry name or '}'")
             self.punct("=")
             value = self.string()
+            span = self.since(key_token)
             if kind == "readers":
                 if not value:
-                    fail("empty_handler", "Reader handler IDs cannot be empty.")
+                    fail("empty_handler", "Reader handler IDs cannot be empty.", span=span)
             elif kind == "roots":
-                check_root(key, value)
+                with located(span):
+                    check_root(key, value)
                 if value in self.roots.values():
-                    fail("duplicate_root", f"Root {key!r} repeats another root's path.")
+                    fail("duplicate_root", f"Root {key!r} repeats another root's path.", span=span)
             else:
                 allowed = NORMALIZE_OPTIONS.get(key)
                 if allowed is None or value not in allowed:
                     fail(
                         "invalid_normalize",
-                        f"line {key_token.line}: normalize accepts "
+                        "Normalize accepts "
                         + ", ".join(
                             f"{k} = {' | '.join(map(repr, v))}"
                             for k, v in NORMALIZE_OPTIONS.items()
@@ -351,11 +379,13 @@ class Parser:
                         + ".",
                         span=(key_token.start, key_token.end),
                     )
-            insert(target, key, value)
+            insert(target, key, value, span)
 
     def example(self, rejection: bool) -> None:
-        self.advance()
-        resource = self.identifier("a resource name")
+        key = ("example", len(self.examples))
+        keyword = self.advance()
+        resource_token = self.expect("id", expected="a resource name")
+        self.spans[(*key, "resource")] = (resource_token.start, resource_token.end)
         self.punct("{")
         source_token = self.peek()
         if self.accept("id", "input"):
@@ -365,29 +395,42 @@ class Parser:
         else:
             self.error("input or location", source_token)
         self.punct("=")
-        text = self.string()
+        text_token = self.expect("string", expected="a string")
+        self.spans[(*key, "input")] = (text_token.start, text_token.end)
         self.keyword("expect")
         expected: dict[str, str | int] = {}
         code = None
         if rejection:
             self.punct("=")
-            code = self.string("a diagnostic code")
+            code_token = self.expect("string", expected="a diagnostic code")
+            code = code_token.value
+            self.spans[(*key, "expect")] = (code_token.start, code_token.end)
         else:
-            self.punct("{")
+            opening = self.punct("{")
             while not self.accept("punct", "}"):
-                key = self.identifier("a field name or '}'")
+                field_token = self.expect("id", expected="a field name or '}'")
                 self.punct("=")
-                insert(expected, key, self.value())
+                value = self.value()
+                span = self.since(field_token)
+                insert(expected, field_token.value, value, span)
+                self.spans[(*key, "expect", field_token.value)] = span
+            self.spans[(*key, "expect")] = self.since(opening)
         self.punct("}")
-        self.examples.append(ExampleSpec(resource, text, expected, code, source))
+        self.spans[key] = self.since(keyword)
+        self.examples.append(
+            ExampleSpec(resource_token.value, text_token.value, expected, code, source)
+        )
 
 
-def insert(target: dict, name: str, value: object) -> None:
+def insert(target: dict, name: str, value: object, span: Span | None = None) -> None:
     if name in target:
-        fail("duplicate_definition", f"Duplicate definition: {name!r}.")
+        fail("duplicate_definition", f"Duplicate definition: {name!r}.", span=span)
     target[name] = value
 
 
 def compile_definition(source: str) -> Definition:
     """Parse rule text into a Definition. Errors raise NameSpecError with a source span."""
-    return Parser(source).parse()
+    try:
+        return Parser(source).parse()
+    except NameSpecError as exc:
+        raise NameSpecError(exc.diagnostics, source) from None

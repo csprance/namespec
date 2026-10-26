@@ -4,10 +4,68 @@ const path = require("node:path");
 const { performance } = require("node:perf_hooks");
 const vscode = require("vscode");
 
+const { VENV } = require("../examples.cjs");
+
+const CLI = path.join(__dirname, "../../..", ...VENV);
+const GUIDE = fs.readFileSync(path.join(__dirname, "../../../examples/guide.names"), "utf8");
+const BROKEN = GUIDE.replace('lod = "high" version = 4', 'lod = "mid" version = 4');
+
+function diagnostics(uri, accept, timeout = 15000) {
+  return new Promise((resolve, reject) => {
+    const settle = () => {
+      const found = vscode.languages.getDiagnostics(uri);
+      if (!accept(found)) return;
+      finish();
+      resolve(found);
+    };
+    const listener = vscode.languages.onDidChangeDiagnostics(({ uris }) => {
+      if (uris.some((changed) => changed.toString() === uri.toString())) settle();
+    });
+    const timer = setTimeout(() => {
+      finish();
+      reject(new Error(`no matching diagnostics for ${uri}`));
+    }, timeout);
+    const finish = () => { listener.dispose(); clearTimeout(timer); };
+    settle();
+  });
+}
+
+// Live checks underline an unsaved buffer; a test run reads a closed file from disk. The
+// run half needs a scratch folder passed as the last argument so the file can be found.
+async function examples() {
+  const document = await vscode.workspace.openTextDocument({ language: "namespec", content: BROKEN });
+  const [failure] = await diagnostics(document.uri, (found) => found.length > 0);
+  assert.equal(failure.message, 'Expected lod = "mid", got "high".');
+  assert.equal(failure.source, "namespec");
+  assert.equal(document.getText(failure.range), 'lod = "mid"');
+  const fix = new vscode.WorkspaceEdit();
+  fix.replace(document.uri, failure.range, 'lod = "high"');
+  assert.ok(await vscode.workspace.applyEdit(fix));
+  await diagnostics(document.uri, (found) => found.length === 0);
+
+  const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
+  if (!folder) return "live checks";
+  const rules = vscode.Uri.joinPath(folder, `broken-${process.pid}.names`);
+  await vscode.workspace.fs.writeFile(rules, Buffer.from(BROKEN.replace(/\r?\n/g, "\r\n")));
+  try {
+    await vscode.commands.executeCommand("testing.refreshTests");
+    await vscode.commands.executeCommand("testing.runAll");
+    const [ran] = await diagnostics(rules, (found) => found.length > 0);
+    assert.equal(ran.message, 'Expected lod = "mid", got "high".');
+    assert.equal(vscode.workspace.textDocuments.some((open) => open.uri.toString() === rules.toString()), false);
+  } finally {
+    await vscode.workspace.fs.delete(rules);
+  }
+  return "live checks and a test run";
+}
+
 // Run with VS Code's --extensionDevelopmentPath and --extensionTestsPath flags.
 async function run() {
   const extension = vscode.extensions.getExtension("namespec-local.namespec");
   assert.ok(extension);
+  if (fs.existsSync(CLI)) {
+    await vscode.workspace.getConfiguration("namespec").update("command", CLI, vscode.ConfigurationTarget.Global);
+  }
   await extension.activate();
   const document = await vscode.workspace.openTextDocument({
     language: "namespec",
@@ -67,6 +125,8 @@ async function run() {
   }
   console.log(`Namespec extension host timings: ${JSON.stringify(timings)}`);
   console.log("Namespec extension host: activation, definition previews, highlighted hover payloads, unsaved edits and comments passed.");
+  if (fs.existsSync(CLI)) console.log(`Namespec extension host: ${await examples()} passed.`);
+  else console.log(`Namespec extension host: examples skipped, ${CLI} is missing.`);
 }
 
 module.exports = { run };

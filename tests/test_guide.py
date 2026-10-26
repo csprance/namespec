@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ from namespec import Catalog, NameSpecError, Resource, load_rules
 from namespec.cli import main
 
 GUIDE = Path(__file__).parents[1] / "examples" / "guide.names"
+README = GUIDE.parents[1] / "README.md"
 SCENE = "/Volumes/jobs/show17/shots/101/101_120/101_120_0040/comp/101_120_0040_comp_v003.nk"
 
 
@@ -40,10 +42,31 @@ def test_2_blanks_have_rules_and_errors_name_the_blank(catalog):
     assert catalog.validate("Donut_high_v4.abc", "model").diagnostics[0].expected == "004"
 
 
-def test_3_examples_are_tests(catalog, capsys):
+def readme_block(start):
+    """The README code block that starts with ``start``."""
+    for block in re.findall(r"```\w*\n(.*?)```", README.read_text(encoding="utf-8"), re.S):
+        if block.startswith(start):
+            return block
+    raise AssertionError(f"README has no block starting {start!r}")
+
+
+def test_3_examples_are_tests(catalog, capsys, tmp_path, monkeypatch):
     assert catalog.check_examples() == []
     assert main([str(GUIDE), "test"]) == 0
-    assert '"passed": true' in capsys.readouterr().out
+    assert capsys.readouterr().out == "9 passed\n"
+    # rules.names is the step 1 file with the step 3 examples under it.
+    monkeypatch.chdir(tmp_path)
+    rules = readme_block("spec 1\n") + "\n" + readme_block("example model {\n")
+    Path("rules.names").write_text(rules, encoding="utf-8")
+    assert main(["rules.names", "test"]) == 0
+    assert capsys.readouterr().out == readme_block("3 passed")
+    Path("rules.names").write_text(rules.replace('"mid", "high"', '"mid", "hi"'), encoding="utf-8")
+    assert main(["rules.names", "test"]) == 1
+    assert capsys.readouterr().out == readme_block("rules.names:13:13:")
+    wrong = rules.replace('lod = "high"', 'lod = "mid"')
+    assert Catalog.from_string(wrong).check_examples()[0].message == (
+        'Expected lod = "mid", got "high".'
+    )
 
 
 def test_4_where_it_lives(catalog):

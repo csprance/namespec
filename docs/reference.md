@@ -39,11 +39,11 @@ Both readings run against the whole input. Nothing is altered except what a `nor
 
 ## Error codes
 
-Definition errors raise `NameSpecError` while loading. They carry a source span for syntax errors.
+Definition errors raise `NameSpecError` while loading. Each diagnostic's `span` covers the declaration at fault (the token, the sample, the template entry), and the exception's message starts with that line and column.
 
 | code | meaning |
 | --- | --- |
-| `syntax_error` | the file does not parse; message has line and column |
+| `syntax_error` | the file does not parse |
 | `unsupported_spec` | the `spec` number is not 1 |
 | `reserved_field` | a field named `name`, `root` or a keyword |
 | `invalid_pattern`, `empty_field`, `invalid_sample`, `invalid_integer`, `duplicate_choice` | a field rule is unusable |
@@ -70,7 +70,9 @@ Validation results carry diagnostics instead of raising.
 | `invalid_type` | formatting was given the wrong Python type |
 | `conflicting_field` | repeated occurrences disagree, or one is present and one absent; `composite` names the owning composite |
 | `reserved_separator` | formatting a value that contains a path separator |
-| `example_failed` | an inline example or rejection did not hold |
+| `example_failed` | an inline example or rejection did not hold; the message says what differed |
+
+A span is a pair of character offsets. In a validation it is into the name; in a definition error or an `example_failed` it is into the rule text. An `example_failed` points at the `expect` entry that differed, at `expect { … }` when fields are missing from it, and otherwise at the `input`.
 
 Operations raise with these codes.
 
@@ -98,7 +100,8 @@ Operations raise with these codes.
 | `catalog.locate(resource, base=None, **overrides)` | a location |
 | `catalog.validate_field(name, text)`, `catalog.format_field(name, value)` | one field alone |
 | `catalog.samples(resource, limit=10, **overrides)` | generated names |
-| `catalog.check_examples()` | failed inline examples as diagnostics |
+| `catalog.run_examples()` | an `ExampleResult` per example: `example`, `span` of its block, `passed`, `failures` |
+| `catalog.check_examples()` | the failures alone, as diagnostics; empty when every example holds |
 | `catalog.normalize(text, source="location")` | the text after the normalize block |
 | `catalog.roots`, `catalog.root_name(value)` | declared roots |
 | `catalog.resource(*kinds)`, `catalog.bind(cls, *kinds)`, `catalog.resource_class(kind)` | class binding |
@@ -111,13 +114,13 @@ A `Resource` has `kind`, `fields`, `metadata`, `name`, `locate(**context)`, `rea
 
 ```text
 namespec <rules> inspect <text> [--resource R] [--source name|location]
-namespec <rules> test
+namespec <rules> test [--json]
 namespec <rules> export [--output file.json]
 namespec <rules> format <resource> '<json fields>'
 namespec <rules> locate <resource> '<json fields>'
 ```
 
-Output is JSON. Exit codes: 0 success, 1 invalid or ambiguous input or failed examples, 2 definition or operation error.
+`<rules>` is a path, or `-` to read the rule text from stdin. Output is JSON, except `test`, which prints a `file:line:column:` line per failure and then a count; `test --json` reports every example with its span, line, column and failures. Definition errors in JSON output carry `line` and `column` beside the span. Exit codes: 0 success, 1 invalid or ambiguous input or failed examples, 2 definition or operation error.
 
 ## Not implemented
 

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass, field
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any, NoReturn
 
 SPEC_VERSION = 1
@@ -22,15 +24,45 @@ class Diagnostic:
 
 
 class NameSpecError(ValueError):
-    """A definition or operation failed, with machine-readable diagnostics."""
+    """A definition or operation failed, with machine-readable diagnostics.
 
-    def __init__(self, diagnostics: list[Diagnostic]):
+    ``source`` is the rule text when the failure is in it. The message then leads each
+    located diagnostic with its line and column; the diagnostics keep plain messages.
+    """
+
+    def __init__(self, diagnostics: list[Diagnostic], source: str | None = None):
         self.diagnostics = diagnostics
-        super().__init__("; ".join(item.message for item in diagnostics))
+        super().__init__("; ".join(where(source, item.span) + item.message for item in diagnostics))
 
 
 def fail(code: str, message: str, **details: Any) -> NoReturn:
     raise NameSpecError([Diagnostic(code, message, **details)])
+
+
+def position(source: str, offset: int) -> tuple[int, int]:
+    """The 1-based line and column of an offset into rule text."""
+    line_start = source.rfind("\n", 0, offset) + 1
+    return source.count("\n", 0, offset) + 1, offset - line_start + 1
+
+
+def where(source: str | None, span: tuple[int, int] | None) -> str:
+    if source is None or span is None:
+        return ""
+    line, column = position(source, span[0])
+    return f"line {line}, column {column}: "
+
+
+@contextmanager
+def located(span: tuple[int, int] | None) -> Iterator[None]:
+    """Point definition errors raised inside at ``span`` unless they already have one."""
+    try:
+        yield
+    except NameSpecError as exc:
+        if span is None:
+            raise
+        raise NameSpecError(
+            [item if item.span else replace(item, span=span) for item in exc.diagnostics]
+        ) from None
 
 
 @dataclass(frozen=True)
@@ -72,13 +104,33 @@ class Definition:
     examples: tuple[ExampleSpec, ...]
     roots: dict[str, str] = field(default_factory=dict)
     normalize: dict[str, str] = field(default_factory=dict)
+    # Where declarations sit in the rule text, keyed like ("example", 0, "input"). Editors
+    # and test reports use it; it is not part of the model, so the export leaves it out.
+    spans: dict[tuple[str | int, ...], tuple[int, int]] = field(
+        default_factory=dict, compare=False, repr=False
+    )
 
     def to_dict(self) -> dict[str, Any]:
         """Export the model with JSON-native containers; text regexes keep Python re semantics."""
-        return _jsonable(asdict(self))
+        model = asdict(self)
+        del model["spans"]
+        return _jsonable(model)
 
 
-def validate_field_spec(spec: FieldSpec) -> None:
+@dataclass(frozen=True)
+class ExampleResult:
+    """One inline example or rejection after a run. Spans point into the rule text."""
+
+    example: ExampleSpec
+    span: tuple[int, int] | None = None
+    failures: tuple[Diagnostic, ...] = ()
+
+    @property
+    def passed(self) -> bool:
+        return not self.failures
+
+
+def validate_field_spec(spec: FieldSpec, sample_spans: Sequence[tuple[int, int]] = ()) -> None:
     """Field-level rules, applied by the parser once a rule has been read."""
     if spec.name in RESERVED_FIELDS:
         fail("reserved_field", f"The field {spec.name!r} is reserved for resource templates.")
@@ -89,8 +141,16 @@ def validate_field_spec(spec: FieldSpec) -> None:
             fail("invalid_pattern", f"{spec.name}: {exc}")
         if regex.fullmatch(""):
             fail("empty_field", f"{spec.name} must not accept an empty string.")
-        if any(not regex.fullmatch(value) for value in spec.samples):
-            fail("invalid_sample", f"An example violates field {spec.name!r}.")
+        for index, value in enumerate(spec.samples):
+            if not regex.fullmatch(value):
+                fail(
+                    "invalid_sample",
+                    f"Sample {value!r} for {spec.name!r} does not match {spec.pattern!r}.",
+                    field=spec.name,
+                    expected=spec.pattern,
+                    actual=value,
+                    span=sample_spans[index] if sample_spans else None,
+                )
     elif spec.kind == "integer":
         if spec.minimum < 0 or spec.width < 0:
             fail("invalid_integer", "Minimum and padding must be nonnegative.")

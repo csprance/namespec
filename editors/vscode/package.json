@@ -1,8 +1,8 @@
 {
   "name": "namespec",
   "displayName": "Namespec",
-  "description": "Syntax highlighting, declaration hovers and go-to-definition for Namespec naming rules (.names).",
-  "version": "0.5.0",
+  "description": "Syntax highlighting, declaration hovers, go-to-definition and live example tests for Namespec naming rules (.names).",
+  "version": "0.6.0",
   "main": "./extension.cjs",
   "publisher": "namespec-local",
   "private": true,
@@ -11,8 +11,21 @@
     "vscode": "^1.85.0"
   },
   "categories": [
-    "Programming Languages"
+    "Programming Languages",
+    "Testing"
   ],
+  "activationEvents": [
+    "workspaceContains:**/*.names"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Examples are only run in trusted workspaces, because running them starts the namespec command.",
+      "restrictedConfigurations": [
+        "namespec.command"
+      ]
+    }
+  },
   "scripts": {
     "test": "node --test test/*.test.cjs",
     "package": "vsce package --allow-missing-repository --skip-license"
@@ -37,7 +50,18 @@
         "scopeName": "source.namespec",
         "path": "./syntaxes/namespec.tmLanguage.json"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Namespec",
+      "properties": {
+        "namespec.command": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "markdownDescription": "The `namespec` executable that runs a rule file's examples. Leave empty to use the nearest `.venv` at or above the rule file, then `namespec` on `PATH`."
+        }
+      }
+    }
   },
   "dependencies": {
     "vscode-oniguruma": "^2.0.1",

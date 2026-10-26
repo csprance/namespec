@@ -165,7 +165,7 @@ def test_cli_json_and_exit_codes(capsys, valid_case, invalid_case):
     assert json.loads(capsys.readouterr().out)["status"] == "valid"
     assert main([str(invalid_case.schema), "inspect", invalid_case.input]) == 1
     assert json.loads(capsys.readouterr().out)["status"] == "invalid"
-    assert main([str(EXAMPLE), "test"]) == 0
+    assert main([str(EXAMPLE), "test", "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["passed"]
 
 

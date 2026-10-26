@@ -80,7 +80,20 @@ reject model { input = "Donut_high_v4.abc" expect = "noncanonical_field" }
 uv run namespec rules.names test
 ```
 
-An `example` must produce exactly those fields, with those types. A `reject` must produce that error code. When someone changes a rule, the examples say what broke.
+```text
+3 passed
+```
+
+An `example` must produce exactly those fields, with those types. A `reject` must produce that error code. When someone changes a rule, the examples say what broke and where. Rename `"high"` to `"hi"` in the `lod` rule and run it again:
+
+```text
+rules.names:13:13: example model: Not a valid model: Invalid 'lod'; expected one of ('low', 'mid', 'hi').
+2 passed, 1 failed
+```
+
+`13:13` is the line and column of the example's `input`, so a terminal or editor can jump straight to it. A wrong value in `expect` is pointed at directly, with a message like `Expected lod = "mid", got "high".` Add `--json` to get the same results as data.
+
+In VS Code, the [extension](editors/vscode/README.md) runs the same check while you type. Failures are underlined where they happen, and every example gets a run button in the gutter.
 
 ## 4. Where it lives
 
@@ -291,4 +304,4 @@ catalog = load_rules("STUDIO_NAMES", default="examples/guide.names")
 5. Run `namespec rules.names test` until it passes. Then `inspect` a few names you are unsure about.
 6. Reach for composites when a part has parts, brackets when a part comes and goes, a folder resource when a tool wants a directory.
 
-[examples/studio.names](examples/studio.names) is a larger fictional convention written this way, with [CSV tables](tests/cases/README.md) of expected answers beside it. [docs/reference.md](docs/reference.md) lists every construct, every error code and the Python API. [editors/vscode](editors/vscode/README.md) has syntax highlighting and go-to-definition for `.names` files.
+[examples/studio.names](examples/studio.names) is a larger fictional convention written this way, with [CSV tables](tests/cases/README.md) of expected answers beside it. [docs/reference.md](docs/reference.md) lists every construct, every error code and the Python API. [editors/vscode](editors/vscode/README.md) has syntax highlighting and go-to-definition for `.names` files, and runs their examples as you type.

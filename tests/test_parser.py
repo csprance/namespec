@@ -14,16 +14,23 @@ def diagnostics(source):
     return exc.value.diagnostics
 
 
+def error(source):
+    with pytest.raises(NameSpecError) as exc:
+        Catalog.from_string(source)
+    return str(exc.value)
+
+
 def test_syntax_errors_carry_line_column_and_span():
     source = 'spec 1\nx = one of "a"\nresource r { name = "{x}" '
     [item] = diagnostics(source)
     assert item.code == "syntax_error"
-    assert "line 3, column 27" in item.message
     assert "found end of file" in item.message
     assert item.span == (len(source), len(source))
+    assert error(source).startswith("line 3, column 27: expected")
     [item] = diagnostics('spec 1\n  x = one of "a')
-    assert "line 2, column 14: unterminated string" in item.message
+    assert item.message == "unterminated string."
     assert item.span == (20, 21)
+    assert error('spec 1\n  x = one of "a') == "line 2, column 14: unterminated string."
     [item] = diagnostics("spec 1\nx = one of @")
     assert "unexpected '@'" in item.message
     [item] = diagnostics('spec 1 resource r { name = "{x}" input = "y" }')

@@ -10,7 +10,17 @@ from itertools import islice, product
 from pathlib import Path, PurePath
 from typing import Any
 
-from .models import Definition, Diagnostic, Inspection, NameSpecError, Validation, fail
+from .models import (
+    Definition,
+    Diagnostic,
+    ExampleResult,
+    ExampleSpec,
+    Inspection,
+    NameSpecError,
+    Validation,
+    fail,
+    located,
+)
 from .parser import compile_definition
 from .template import Template, field_value, spelling
 
@@ -23,48 +33,57 @@ class Catalog:
         self._readers: dict[str, Callable[[Path], Any]] = {}
         self._classes: dict[str, type[Resource]] = {}
         self._composites: dict[str, Template] = {}
+        spans = definition.spans
         for spec in definition.fields.values():
             if spec.kind == "composite":
                 # Surfaces unknown parts, cycles and ambiguous boundaries for unused composites too.
-                Template(spec.template, definition.fields)
+                with located(spans.get(("field", spec.name))):
+                    Template(spec.template, definition.fields)
         for name, spec in definition.resources.items():
             template = None
             if spec.template is not None:
-                template = Template(spec.template, definition.fields)
+                with located(spans.get(("resource", name, "name"))):
+                    template = Template(spec.template, definition.fields)
                 self._names[name] = template
             if spec.location:
-                if template is None:
-                    if "{name}" in spec.location:
-                        fail(
-                            "invalid_template",
-                            f"Folder resource {name!r} has no filename to put in {{name}}.",
-                        )
-                    expanded = spec.location
-                else:
-                    # Expand the filename into field slots, retaining repeated-value checks.
-                    expanded = spec.location.replace("{name}", spec.template)
-                location = Template(expanded, definition.fields, roots=definition.roots)
-                if template is not None and not set(template.names).issubset(location.names):
-                    fail(
-                        "incomplete_location",
-                        f"Location for {name!r} must include its name fields.",
-                    )
-                self._locations[name] = location
+                with located(spans.get(("resource", name, "location"))):
+                    self._locations[name] = self._location(name, template)
             if spec.reader_field:
-                if template is None:
-                    fail("invalid_reader", f"Folder resource {name!r} cannot select a reader.")
-                self._check_reader(name, spec.reader_field, template)
-        for example in definition.examples:
+                with located(spans.get(("resource", name, "reader"))):
+                    if template is None:
+                        fail("invalid_reader", f"Folder resource {name!r} cannot select a reader.")
+                    self._check_reader(name, spec.reader_field, template)
+        for index, example in enumerate(definition.examples):
+            span = spans.get(("example", index, "input"))
             if example.source == "location" and example.resource not in self._locations:
                 fail(
                     "missing_location",
                     f"A location example needs a location on resource {example.resource!r}.",
+                    span=span,
                 )
             if example.source == "name" and example.resource not in self._names:
                 fail(
                     "missing_name",
                     f"Resource {example.resource!r} has no name; use a location example.",
+                    span=span,
                 )
+
+    def _location(self, name: str, template: Template | None) -> Template:
+        spec = self.definition.resources[name]
+        if template is None:
+            if "{name}" in spec.location:
+                fail(
+                    "invalid_template",
+                    f"Folder resource {name!r} has no filename to put in {{name}}.",
+                )
+            expanded = spec.location
+        else:
+            # Expand the filename into field slots, retaining repeated-value checks.
+            expanded = spec.location.replace("{name}", spec.template)
+        location = Template(expanded, self.definition.fields, roots=self.definition.roots)
+        if template is not None and not set(template.names).issubset(location.names):
+            fail("incomplete_location", f"Location for {name!r} must include its name fields.")
+        return location
 
     def _check_reader(self, name: str, reader_field: str, template: Template) -> None:
         if reader_field not in template.names:
@@ -78,7 +97,11 @@ class Catalog:
 
     @classmethod
     def from_string(cls, source: str) -> Catalog:
-        return cls(compile_definition(source))
+        definition = compile_definition(source)
+        try:
+            return cls(definition)
+        except NameSpecError as exc:
+            raise NameSpecError(exc.diagnostics, source) from None
 
     @classmethod
     def from_file(cls, path: str | os.PathLike[str]) -> Catalog:
@@ -270,36 +293,68 @@ class Catalog:
             fail("unknown_resource", f"Unknown resource {kind!r}.")
         return self._classes.get(kind, Resource)
 
+    def run_examples(self) -> list[ExampleResult]:
+        """Run every inline example and rejection. Each failure says what differed and where."""
+        spans = self.definition.spans
+        return [
+            ExampleResult(
+                example, spans.get(("example", index)), tuple(self._failures(index, example))
+            )
+            for index, example in enumerate(self.definition.examples)
+        ]
+
     def check_examples(self) -> list[Diagnostic]:
-        """Run exact expected-field and expected-error assertions in the rule document."""
-        failures: list[Diagnostic] = []
-        for index, example in enumerate(self.definition.examples, 1):
-            result = self.validate(example.input, example.resource, source=example.source)
-            if example.error_code:
-                passed = any(d.code == example.error_code for d in result.diagnostics)
-                expected = example.error_code
-                actual = [d.code for d in result.diagnostics]
-            else:
-                # Avoid Python's loose numeric equality hiding a type error in the contract.
-                passed = (
-                    result.valid
-                    and result.fields == example.expected
-                    and all(
-                        type(result.fields[key]) is type(value)
-                        for key, value in example.expected.items()
-                    )
+        """The failures from ``run_examples``, flattened; empty when every example holds."""
+        return [failure for result in self.run_examples() for failure in result.failures]
+
+    def _failures(self, index: int, example: ExampleSpec) -> Iterator[Diagnostic]:
+        def failed(message: str, *at: str, **details: Any) -> Diagnostic:
+            span = self.definition.spans.get(("example", index, *at))
+            return Diagnostic("example_failed", message, span=span, **details)
+
+        result = self.validate(example.input, example.resource, source=example.source)
+        codes = [item.code for item in result.diagnostics]
+        reasons = " ".join(item.message for item in result.diagnostics)
+        if example.error_code:
+            if example.error_code in codes:
+                return
+            message = (
+                f"Expected {example.error_code}, but this is a valid {example.resource}."
+                if result.valid
+                else f"Expected {example.error_code}, got {', '.join(codes)}: {reasons}"
+            )
+            yield failed(message, "input", expected=example.error_code, actual=codes)
+            return
+        if not result.valid:
+            message = f"Not a valid {example.resource}: {reasons}"
+            yield failed(message, "input", expected=example.expected, actual=codes)
+            return
+        for name, value in example.expected.items():
+            if name not in result.fields:
+                message = (
+                    f"Expected {name} = {literal(value)}, "
+                    f"but this {example.resource} has no {name}."
                 )
-                expected, actual = example.expected, result.fields
-            if not passed:
-                failures.append(
-                    Diagnostic(
-                        "example_failed",
-                        f"Example {index} for {example.resource!r} failed.",
-                        expected=expected,
-                        actual=actual,
-                    )
+                yield failed(message, "expect", name, field=name, expected=value)
+                continue
+            actual = result.fields[name]
+            # Avoid Python's loose numeric equality hiding a type error in the contract.
+            if actual == value and type(actual) is type(value):
+                continue
+            message = f"Expected {name} = {literal(value)}, got {literal(actual)}."
+            if type(actual) is not type(value):
+                message += (
+                    f" {name} is a number, so write it without quotes."
+                    if isinstance(actual, int)
+                    else f" {name} is text, so quote it."
                 )
-        return failures
+            yield failed(message, "expect", name, field=name, expected=value, actual=actual)
+        missing = {
+            name: value for name, value in result.fields.items() if name not in example.expected
+        }
+        if missing:
+            listed = " ".join(f"{name} = {literal(value)}" for name, value in missing.items())
+            yield failed(f"Missing from expect: {listed}", "expect", actual=missing)
 
     def samples(self, resource: str, *, limit: int = 10, **overrides: Any) -> Iterator[str]:
         """Generate bounded examples from enums, integer minima, and authored text examples.
@@ -354,6 +409,13 @@ def as_text(value: Any) -> str:
     if not isinstance(value, str):
         raise TypeError("expected a string or a path object")
     return value
+
+
+def literal(value: str | int) -> str:
+    """A value spelled the way a rule document writes it."""
+    if isinstance(value, int):
+        return str(value)
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def _merge(base: Mapping[str, Any] | None, overrides: Mapping[str, Any]) -> dict[str, Any]:
