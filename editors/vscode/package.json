@@ -2,11 +2,11 @@
   "name": "namespec",
   "displayName": "Namespec",
   "description": "Syntax highlighting, declaration hovers and go-to-definition for Namespec naming rules (.names).",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "main": "./extension.cjs",
   "publisher": "namespec-local",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
   },

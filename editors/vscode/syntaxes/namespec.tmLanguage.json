@@ -15,7 +15,7 @@
     },
     { "match": "\\b(?:text|integer)\\b", "name": "storage.type.namespec" },
     {
-      "match": "\\b(?:spec|matching|examples|minimum|padded|to|digits|one|of|readers|expect)\\b",
+      "match": "\\b(?:spec|matching|examples|minimum|padded|to|digits|one|of|readers|roots|normalize|meta|expect)\\b",
       "name": "keyword.control.namespec"
     },
     {
@@ -35,19 +35,42 @@
       "end": "$"
     },
     "templates": {
-      "name": "meta.assignment.template.namespec",
-      "begin": "\\b(name|location)\\s*(=)\\s*([\"'])",
-      "beginCaptures": {
-        "1": { "name": "variable.other.property.namespec" },
-        "2": { "name": "keyword.operator.assignment.namespec" },
-        "3": { "name": "punctuation.definition.string.begin.namespec" }
-      },
-      "end": "\\3",
-      "endCaptures": { "0": { "name": "punctuation.definition.string.end.namespec" } },
-      "contentName": "string.quoted.template.namespec",
+      "patterns": [
+        {
+          "comment": "Resource name and location templates, wherever they appear on a line.",
+          "name": "meta.assignment.template.namespec",
+          "begin": "\\b(name|location)\\s*(=)\\s*([\"'])",
+          "beginCaptures": {
+            "1": { "name": "variable.other.property.namespec" },
+            "2": { "name": "keyword.operator.assignment.namespec" },
+            "3": { "name": "punctuation.definition.string.begin.namespec" }
+          },
+          "end": "\\3",
+          "endCaptures": { "0": { "name": "punctuation.definition.string.end.namespec" } },
+          "contentName": "string.quoted.template.namespec",
+          "patterns": [{ "include": "#slots" }]
+        },
+        {
+          "comment": "Composite field declarations such as Shot = \"{Sequence}_{shotnum}\" start a line. Keyword-led entries (input, expect) stay plain strings.",
+          "name": "meta.assignment.template.namespec",
+          "begin": "^\\s*(?!(?:spec|input|expect|resource|example|reject|readers|roots|meta)\\b)([A-Za-z_][A-Za-z0-9_]*)\\s*(=)\\s*([\"'])",
+          "beginCaptures": {
+            "1": { "name": "variable.other.property.namespec" },
+            "2": { "name": "keyword.operator.assignment.namespec" },
+            "3": { "name": "punctuation.definition.string.begin.namespec" }
+          },
+          "end": "\\3",
+          "endCaptures": { "0": { "name": "punctuation.definition.string.end.namespec" } },
+          "contentName": "string.quoted.template.namespec",
+          "patterns": [{ "include": "#slots" }]
+        }
+      ]
+    },
+    "slots": {
       "patterns": [
         { "include": "#escapes" },
         { "match": "\\{\\{|\\}\\}", "name": "constant.character.escape.namespec" },
+        { "match": "[\\[\\]]", "name": "punctuation.section.optional.namespec" },
         {
           "match": "(\\{)([A-Za-z_][A-Za-z0-9_]*)(\\})",
           "captures": {

@@ -23,7 +23,9 @@ Open the CSV in a table-capable editor or import it into a spreadsheet as UTF-8.
 | `diagnostics` | Expected errors, such as `invalid_field:lod`. Separate multiple errors with semicolons. Use `pattern_mismatch` when no field can be assigned. |
 | `notes` | A plain-language explanation of what the row demonstrates. |
 
-**A blank metadata cell means the field must be absent, not “skip this check.”** Invalid inputs still list every recoverable field. Conflicting or invalid fields stay blank. All error code/field pairs must match exactly, including repeated errors; their order does not matter.
+**A blank metadata cell means the field must be absent, not “skip this check.”** Invalid inputs still list every recoverable field. Conflicting or invalid fields stay blank, and so does any composite field built from them. All error code/field pairs must match exactly, including repeated errors; their order does not matter.
+
+Composite fields appear as their own columns next to their parts: a row for a shot built as `Shot = "{Sequence}_{shotnum}"` lists `field.Shot`, `field.Sequence`, `field.Episode`, `field.seqnum` and `field.shotnum`. Fields inside an optional group are blank when the group is absent. Location rows under a declared root list the matched prefix in `field.root`. When a name row supplies `context.*` for a location round trip, the context must contain every key the location adds, including the root value (not its name) and composite parts alongside the composite. A location input may use the spelling a `normalize` block accepts, such as backslashes; the row is checked against the normalized form.
 
 For example, `Donut_ultra_v004.abc` is invalid, but its row still expects `asset_name=Donut`, `version=4`, and `filetype=abc`. Its LOD cell is blank and its error is `invalid_field:lod`.
 

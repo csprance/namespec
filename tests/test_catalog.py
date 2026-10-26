@@ -107,8 +107,18 @@ def test_reader_is_explicit_and_uses_supplied_metadata(tmp_path):
 @pytest.mark.parametrize(
     "source,code",
     [
-        ("spec 2", "unsupported_spec"),
+        ("spec 3", "unsupported_spec"),
         ("spec 1", "missing_resource"),
+        ("", "syntax_error"),
+        ("spec 1 resource a { }", "invalid_resource"),
+        (
+            'spec 1 resource a { name = "{x}" name = "{x}" } x = one of "a"',
+            "duplicate_definition",
+        ),
+        (
+            'spec 1 resource a { name = "{x}" meta { kind = "a" kind = "b" } } x = one of "a"',
+            "duplicate_definition",
+        ),
         ('spec 1 resource bad { name = "{missing}" }', "unknown_field"),
         ('spec 1 resource a { name = "{x}{x}" } x = one of "a"', "ambiguous_template"),
         ('spec 1 resource a { name = "{x}" } x = text matching "["', "invalid_pattern"),
@@ -137,14 +147,16 @@ def test_definition_errors_are_actionable(source, code):
     assert codes(exc) == [code]
 
 
-def test_reserved_delimiter_is_rejected_when_generating():
+def test_values_may_contain_template_punctuation_when_their_rule_allows_it():
     catalog = Catalog.from_string("""spec 1
         resource item { name = "{part}_{ext}" }
-        part = text matching "[a-z_]+"
+        part = text matching "[a-z_/]+"
         ext = one of "abc"
     """)
+    assert catalog.format("item", part="under_score", ext="abc") == "under_score_abc"
+    assert catalog.parse("under_score_abc").fields == {"part": "under_score", "ext": "abc"}
     with pytest.raises(NameSpecError) as exc:
-        catalog.format("item", part="bad_name", ext="abc")
+        catalog.format("item", part="path/separator", ext="abc")
     assert codes(exc) == ["reserved_separator"]
 
 

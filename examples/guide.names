@@ -1,0 +1,106 @@
+spec 1
+
+// A small studio convention. The README builds this file up one idea at a time.
+
+// Where jobs live on each platform. {root} in a location matches either one.
+roots {
+    mac     = "/Volumes/jobs"
+    windows = "J:/jobs"
+}
+
+// Paths pasted from Windows arrive with backslashes and sometimes a lowercase drive.
+normalize {
+    slashes = "forward"
+    drive   = "upper"
+}
+
+// FIELDS: what fits in each blank.
+job       = text matching "[a-z0-9]+" examples "show17"
+asset     = text matching "[A-Z][a-z]+" examples "Donut", "Chair"
+lod       = one of "low", "mid", "high"
+version   = integer minimum 1 padded to 3 digits
+ext       = one of "abc", "usd"
+Episode   = text matching "[0-9]+" examples "101"
+seqnum    = text matching "[0-9]+" examples "120"
+shotnum   = text matching "[0-9]+" examples "0040"
+Sequence  = "{Episode}_{seqnum}"
+Shot      = "{Sequence}_{shotnum}"
+Task      = one of "comp", "anim", "light"
+tag       = text matching "[a-z]+" examples "jm"
+scene_ext = one of "nk", "ma"
+frame     = text matching "[0-9]{4}|####" examples "####", "1001"
+image_ext = one of "exr", "png"
+
+// RESOURCES: each kind of name, and where it lives.
+resource model {
+    name     = "{asset}_{lod}_v{version}.{ext}"
+    location = "{root}/{job}/assets/{asset}/{lod}/{name}"
+    meta { entities = ["Asset"] kind = "publish" }
+}
+
+resource scene {
+    name     = "{Shot}_{Task}_v{version}[_{tag}].{scene_ext}"
+    location = "{root}/{job}/shots/{Episode}/{Sequence}/{Shot}/{Task}/{name}"
+    meta { entities = ["Episode", "Sequence", "Shot", "Task"] kind = "workfile" }
+}
+
+resource render {
+    name     = "{Shot}_{Task}_v{version}.{frame}.{image_ext}"
+    location = "{root}/{job}/shots/{Episode}/{Sequence}/{Shot}/{Task}/renders/v{version}/{name}"
+    meta { entities = ["Episode", "Sequence", "Shot", "Task", "Version"] kind = "render" }
+}
+
+resource task_folder {
+    location = "{root}/{job}/shots/{Episode}/{Sequence}/{Shot}/{Task}"
+    meta { entities = ["Episode", "Sequence", "Shot", "Task"] kind = "folder" }
+}
+
+// EXAMPLES: the rules test themselves. Run `namespec examples/guide.names test`.
+example model {
+    input = "Donut_high_v004.abc"
+    expect { asset = "Donut" lod = "high" version = 4 ext = "abc" }
+}
+reject model { input = "Donut_ultra_v004.abc" expect = "invalid_field" }
+reject model { input = "Donut_high_v4.abc" expect = "noncanonical_field" }
+reject model {
+    location = "/Volumes/jobs/show17/assets/Chair/high/Donut_high_v004.abc"
+    expect = "conflicting_field"
+}
+
+example scene {
+    input = "101_120_0040_comp_v003_jm.nk"
+    expect {
+        Shot = "101_120_0040" Sequence = "101_120" Episode = "101" seqnum = "120" shotnum = "0040"
+        Task = "comp" version = 3 tag = "jm" scene_ext = "nk"
+    }
+}
+example scene {
+    location = "/Volumes/jobs/show17/shots/101/101_120/101_120_0040/comp/101_120_0040_comp_v003.nk"
+    expect {
+        root = "/Volumes/jobs" job = "show17"
+        Shot = "101_120_0040" Sequence = "101_120" Episode = "101" seqnum = "120" shotnum = "0040"
+        Task = "comp" version = 3 scene_ext = "nk"
+    }
+}
+reject scene {
+    location = "/Volumes/jobs/show17/shots/101/101_120/101_125_0040/comp/101_125_0040_comp_v003.nk"
+    expect = "conflicting_field"
+}
+
+example render {
+    location = "J:/jobs/show17/shots/101/101_120/101_120_0040/comp/renders/v003/101_120_0040_comp_v003.####.exr"
+    expect {
+        root = "J:/jobs" job = "show17"
+        Shot = "101_120_0040" Sequence = "101_120" Episode = "101" seqnum = "120" shotnum = "0040"
+        Task = "comp" version = 3 frame = "####" image_ext = "exr"
+    }
+}
+
+example task_folder {
+    location = "J:/jobs/show17/shots/101/101_120/101_120_0040/comp"
+    expect {
+        root = "J:/jobs" job = "show17"
+        Shot = "101_120_0040" Sequence = "101_120" Episode = "101" seqnum = "120" shotnum = "0040"
+        Task = "comp"
+    }
+}

@@ -73,18 +73,59 @@ test("navigation survives an unfinished resource and ignores unrelated words", (
   assert.deepEqual(targets(source, 'resource'), []);
 });
 
-test("every placeholder in both shipped examples has a declaration", () => {
-  for (const filename of ["assets.names", "studio.names"]) {
+test("every placeholder in the shipped examples has a declaration", () => {
+  for (const filename of ["assets.names", "studio.names", "guide.names"]) {
     const source = fs.readFileSync(path.join(__dirname, "../../../examples", filename), "utf8");
     const lookup = indexDefinitions(source, grammar);
-    for (const line of source.matchAll(/^\s*(?:name|location)\s*=.*$/gm)) {
+    // Resource templates anywhere, plus top-level composite declarations such as Shot = "{...}".
+    for (const line of source.matchAll(/^(?:\s*(?:name|location)\s*=|[A-Za-z_][A-Za-z0-9_]*\s*=\s*").*$/gm)) {
       for (const slot of line[0].matchAll(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g)) {
         const links = lookup(line.index + slot.index + 1);
         assert.equal(links.length, 1, `${filename}: ${slot[0]}`);
-        assert.equal(source.slice(links[0].target.start, links[0].target.end), slot[1]);
+        const expected = slot[1] === "root" ? "roots" : slot[1];
+        assert.equal(source.slice(links[0].target.start, links[0].target.end), expected);
       }
     }
   }
+});
+
+test("composite fields link to their parts and are themselves declarations", () => {
+  const source = 'Episode = text matching "[0-9]+"\r\nseqnum = text matching "[0-9]+"\r\n' +
+    'Sequence = "{Episode}_{seqnum}"\r\n// {Sequence} in a comment\r\n' +
+    'resource scene { name = "{Sequence}_v{version}" }\r\nversion = integer minimum 1';
+  assert.deepEqual(targets(source, "{Episode}", 2), [0]);
+  assert.deepEqual(targets(source, "{seqnum}", 2), [source.indexOf("seqnum =")]);
+  assert.deepEqual(targets(source, "{Sequence}_v", 2), [source.indexOf("Sequence =")]);
+  assert.deepEqual(targets(source, "{Sequence} in", 2), []);
+  const [{ target }] = indexDefinitions(source, grammar)(source.indexOf("{Sequence}_v") + 2);
+  assert.equal(source.slice(target.start, target.rangeEnd), 'Sequence = "{Episode}_{seqnum}"');
+});
+
+test("slots inside optional groups and folder-only resources still resolve", () => {
+  const source = 'tag = text matching "[a-z]+"\nshot = text matching "[0-9]+"\nroots { a = "/a" }\n' +
+    'resource scene { name = "{shot}[_{tag}].nk" location = "{root}/{shot}/{name}" }\n' +
+    'resource folder { location = "{root}/{shot}/work" }';
+  assert.deepEqual(targets(source, "{tag}", 2), [0]);
+  assert.deepEqual(targets(source, "[_{tag}]", 1), []);
+  assert.deepEqual(targets(source, "{shot}/work", 2), [source.indexOf("shot =")]);
+  assert.deepEqual(targets(source, "{root}/{shot}/work", 2), [source.indexOf("roots {")]);
+});
+
+test("root placeholders jump to the roots block and meta blocks stay out of name previews", () => {
+  const roots = 'roots {\n    mac = "/Volumes"\n    windows = "C:/projects"\n}';
+  const resource = 'resource item {\n    name = "{x}"\n    location = "{root}/{name}"\n    meta { kind = "file" entities = ["Asset"] }\n}';
+  const source = 'x = one of "a"\n' + roots + '\n' + resource + '\nexample item { input = "a" expect { x = "a" } }';
+  const lookup = indexDefinitions(source, grammar);
+  const preview = (offset) => {
+    const { target } = lookup(offset)[0];
+    return source.slice(target.rangeStart ?? target.start, target.rangeEnd);
+  };
+  assert.deepEqual(targets(source, "{root}", 2), [source.indexOf("roots {")]);
+  assert.equal(preview(source.indexOf("{root}") + 2), roots);
+  assert.equal(preview(source.indexOf("{name}") + 2), 'name = "{x}"');
+  assert.equal(preview(source.indexOf("example item") + 9), resource);
+  assert.deepEqual(lookup(source.indexOf("kind = ")), []);
+  assert.deepEqual(lookup(source.indexOf('"Asset"') + 2), []);
 });
 
 test("preview ranges contain multiline values without neighboring declarations or comments", () => {

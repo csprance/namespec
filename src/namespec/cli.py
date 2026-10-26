@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import asdict
+from pathlib import Path
 
 from .catalog import Catalog
 from .models import NameSpecError
@@ -19,7 +20,8 @@ def main(argv: list[str] | None = None) -> int:
     inspect.add_argument("--resource")
     inspect.add_argument("--source", choices=["name", "location"], default="name")
     commands.add_parser("test", help="Run the rule document's expected-result examples")
-    commands.add_parser("export", help="Export the draft compiled model as JSON")
+    export = commands.add_parser("export", help="Export the compiled model as JSON")
+    export.add_argument("--output", "-o", help="Write the JSON model to this file instead")
     for operation in ("format", "locate"):
         command = commands.add_parser(operation)
         command.add_argument("resource")
@@ -45,6 +47,9 @@ def main(argv: list[str] | None = None) -> int:
             success = not failures
         elif args.command == "export":
             output = catalog.definition.to_dict()
+            if args.output:
+                Path(args.output).write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
+                output = {"written": args.output, "resources": sorted(output["resources"])}
             success = True
         else:
             fields = json.loads(args.fields)

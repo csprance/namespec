@@ -42,7 +42,8 @@ def test_name_case(name_case, case_catalog):
     if case.source == "name":
         assert resource.name == case.input
     else:
-        assert resource.locate() == case.input
+        # A location is rendered in canonical form; the document's normalize block defines it.
+        assert resource.locate() == catalog.normalize(case.input, "location")
     if case.reader:
         assert resource.reader_id == case.reader
     if case.location:

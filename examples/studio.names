@@ -3,7 +3,8 @@ spec 1
 // Fictional production examples for learning and testing Namespec.
 // All project names, asset names, identifiers, and sample values are illustrative.
 // See studio.md for the example conventions and their limits.
-// Separate resources express optional forms until the language supports optional groups.
+// Optional forms are separate resources here so each shape has its own name; the language
+// also supports optional [..] groups, which examples/guide.names uses instead.
 // A resource describes one kind of name. Braces refer to the field rules at the top.
 // Matching checks the entire name, including literal underscores, dots, and casing.
 // Field examples illustrate values; they do not restrict the allowed vocabulary.

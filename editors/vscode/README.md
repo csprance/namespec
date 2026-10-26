@@ -6,9 +6,11 @@ Hover over a reference or declaration to see its complete rule/value in a syntax
 
 Ctrl+click a reference (Cmd+click on macOS), press F12, or use **Go to Definition** to jump within the current file:
 
-- `{field}` in a name or location template jumps to its field rule.
+- `{field}` in a name or location template jumps to its field rule, including composite fields such as `Shot = "{Sequence}_{shotnum}"` and fields inside optional `[...]` groups.
+- `{part}` inside a composite field's template jumps to the part's rule.
 - `{name}` in a location jumps to that resource's `name` assignment.
-- Resource names after `example` or `reject` jump to the resource declaration.
+- `{root}` in a location jumps to the `roots` block.
+- Resource names after `example` or `reject` jump to the resource declaration. The hover shows the whole block, including its `meta` entries.
 - Expected field names in `expect { ... }` jump to their field rules.
 - `readers` in `reader = readers[filetype]` jumps to the mapping block; `filetype` jumps to its field rule.
 
@@ -22,12 +24,12 @@ From this directory, with Node.js and npm installed:
 npm ci
 npm test
 npm run package
-code --install-extension ./namespec-0.3.0.vsix --force
+code --install-extension ./namespec-0.5.0.vsix --force
 ```
 
 Open a `.names` file. The language indicator should say **Namespec**. If the file was already open, use **Developer: Reload Window**. Existing explicit file-language associations can be changed with **Change Language Mode**.
 
-The publisher ID `namespec-local` is for local development. This extension has not been published to the Marketplace. Its release license and public publisher identity are undecided.
+The publisher ID `namespec-local` is for local development. This extension has not been published to the Marketplace yet; its public publisher identity is undecided. Like the Python package, it is MIT licensed.
 
 ## Development
 

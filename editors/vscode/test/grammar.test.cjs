@@ -52,8 +52,25 @@ test("escaped quotes stay inside strings and escaped braces are literal", () => 
   assert.ok(scopesAt(line, "after").includes("comment.line.double-slash.namespec"));
 });
 
-test("both real schemas tokenize without leaving a string open", () => {
-  for (const filename of ["assets.names", "studio.names"]) {
+test("composite fields, roots and meta use template and keyword scopes", () => {
+  const composite = 'Shot = "{Sequence}_{shotnum}" // shot identity';
+  assert.ok(scopesAt(composite, "Shot").includes("variable.other.property.namespec"));
+  assert.ok(scopesAt(composite, "Sequence").includes("variable.parameter.namespec"));
+  assert.ok(scopesAt(composite, "shot identity").includes("comment.line.double-slash.namespec"));
+  assert.ok(scopesAt('    mac = "/Volumes"', "Volumes").includes("string.quoted.template.namespec"));
+  assert.ok(scopesAt("roots {", "roots").includes("keyword.control.namespec"));
+  assert.ok(scopesAt("normalize {", "normalize").includes("keyword.control.namespec"));
+  const optional = '    name = "{Shot}_{Task}[_{tag}].{ext}"';
+  assert.ok(scopesAt(optional, "[").includes("punctuation.section.optional.namespec"));
+  assert.ok(scopesAt(optional, "tag").includes("variable.parameter.namespec"));
+  assert.ok(scopesAt('    meta { entities = ["Project"] }', "meta").includes("keyword.control.namespec"));
+  assert.ok(scopesAt('    meta { entities = ["Project"] }', "Project").includes("string.quoted.double.namespec"));
+  assert.ok(!scopesAt('    input = "literal_{name}"', "name").includes("variable.parameter.namespec"));
+  assert.ok(!scopesAt('    expect = "{code}"', "code").includes("variable.parameter.namespec"));
+});
+
+test("the real schemas tokenize without leaving a string open", () => {
+  for (const filename of ["assets.names", "studio.names", "guide.names"]) {
     const source = fs.readFileSync(path.join(__dirname, "../../../examples", filename), "utf8");
     let stack = INITIAL;
     for (const line of source.split(/\r?\n/)) {

@@ -15,7 +15,7 @@ function tokensFor(source, grammar) {
       const text = line.slice(token.startIndex, token.endIndex);
       // Keep opaque string spans for complete declaration previews, but never
       // interpret their contents as declarations or block delimiters.
-      if (!slot && token.scopes.some((scope) => /^(string|constant.character|punctuation.definition.string)/.test(scope))) {
+      if (!slot && token.scopes.some((scope) => /^(string|constant.character|punctuation.definition.string|punctuation.section.optional)/.test(scope))) {
         tokens.push({ text, start: offset + token.startIndex, end: offset + token.startIndex + text.length, literal: true });
         continue;
       }
@@ -28,6 +28,9 @@ function tokensFor(source, grammar) {
   }
   return tokens;
 }
+
+const FIELD_RULES = ["text", "integer", "one"];
+const BLOCKS = ["readers", "roots"];
 
 function indexDefinitions(source, grammar) {
   const tokens = tokensFor(source, grammar);
@@ -60,7 +63,12 @@ function indexDefinitions(source, grammar) {
     if (token.literal) continue;
     if (token.slot) {
       if (context?.kind === "resource") {
-        refer(token, `field:${token.text}`, token.text === "name" ? context : undefined);
+        // {name} is the resource's own filename; {root} is the roots block; the rest are fields.
+        if (token.text === "root") refer(token, "roots");
+        else refer(token, `field:${token.text}`, token.text === "name" ? context : undefined);
+      } else if (!context && field) {
+        // A composite field's template refers to other fields.
+        refer(token, `field:${token.text}`);
       }
       continue;
     }
@@ -86,12 +94,13 @@ function indexDefinitions(source, grammar) {
         refer(next, `resource:${next.text}`);
         pending = { kind: token.text, target: token.text === "resource" ? next : undefined };
         i++;
-      } else if (token.text === "readers" && next?.text === "{") {
+      } else if (BLOCKS.includes(token.text) && next?.text === "{") {
         finishField(tokens[i - 1]?.end ?? token.start);
-        declare("readers", token);
-        refer(token, "readers");
-        pending = { kind: "readers", target: token };
-      } else if (next?.text === "=" && ["text", "integer", "one"].includes(after?.text)) {
+        declare(token.text, token);
+        refer(token, token.text);
+        pending = { kind: token.text, target: token };
+      } else if (next?.text === "=" && (FIELD_RULES.includes(after?.text) || after?.literal)) {
+        // `x = text ...`, `x = integer ...`, `x = one of ...`, or a composite `x = "{a}_{b}"`.
         finishField(tokens[i - 1]?.end ?? token.start);
         field = token;
         declare(`field:${token.text}`, token);
@@ -104,6 +113,9 @@ function indexDefinitions(source, grammar) {
           context.template = token;
           refer(token, "", context);
         }
+      } else if (token.text === "meta" && next?.text === "{") {
+        finishTemplate(context, tokens[i - 1]?.end ?? token.start);
+        pending = { kind: "meta" };
       }
       if (token.text === "readers" && next?.text === "[") {
         refer(token, "readers");
