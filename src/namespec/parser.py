@@ -78,7 +78,10 @@ def tokenize(source: str) -> list[Token]:
         if kind == "id":
             value: Any = text
         elif kind == "int":
-            value = int(text)
+            try:
+                value = int(text)
+            except ValueError:
+                fail("invalid_integer", "Integer is too large.", span=(position, match.end()))
         elif kind == "string":
             value = unescape(text[1:-1])
         else:
@@ -260,12 +263,15 @@ class Parser:
         elif self.accept("id", "integer"):
             self.keyword("minimum")
             minimum = self.expect("int", expected="a minimum").value
+            maximum = None
+            if self.accept("id", "maximum"):
+                maximum = self.expect("int", expected="a maximum").value
             width = 0
             if self.accept("id", "padded"):
                 self.keyword("to")
                 width = self.expect("int", expected="a digit count").value
                 self.keyword("digits")
-            spec = FieldSpec(name, "integer", minimum=minimum, width=width)
+            spec = FieldSpec(name, "integer", minimum=minimum, maximum=maximum, width=width)
         elif self.accept("id", "one"):
             self.keyword("of")
             spec = FieldSpec(name, "enum", choices=tuple(item.value for item in self.strings()))
@@ -380,6 +386,7 @@ class Parser:
                         span=(key_token.start, key_token.end),
                     )
             insert(target, key, value, span)
+            self.spans[(kind, key)] = span
 
     def example(self, rejection: bool) -> None:
         key = ("example", len(self.examples))

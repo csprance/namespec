@@ -1,0 +1,74 @@
+{
+  "version": "2.0.0",
+  "options": {
+    "cwd": "${workspaceFolder}/editors/vscode"
+  },
+  "tasks": [
+    {
+      "label": "Namespec: Install VS Code tooling",
+      "detail": "Set up the Python checker, test and build the extension, then install highlighting, navigation and live checks in VS Code.",
+      "type": "shell",
+      "command": "code",
+      "windows": {
+        "command": "code.cmd"
+      },
+      "args": ["--install-extension", "namespec.vsix", "--force"],
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Namespec: Set up Python checker",
+        "Namespec: Install extension dependencies",
+        "Namespec: Test extension",
+        "Namespec: Package extension"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Namespec: Set up Python checker",
+      "hide": true,
+      "type": "process",
+      "command": "uv",
+      "args": ["sync", "--locked", "--inexact"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Namespec: Install extension dependencies",
+      "hide": true,
+      "type": "shell",
+      "command": "npm",
+      "windows": {
+        "command": "npm.cmd"
+      },
+      "args": ["ci"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Namespec: Test extension",
+      "hide": true,
+      "type": "shell",
+      "command": "npm",
+      "windows": {
+        "command": "npm.cmd"
+      },
+      "args": ["test"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Namespec: Package extension",
+      "hide": true,
+      "type": "shell",
+      "command": "npm",
+      "windows": {
+        "command": "npm.cmd"
+      },
+      "args": ["run", "package", "--", "--out", "namespec.vsix"],
+      "problemMatcher": []
+    }
+  ]
+}

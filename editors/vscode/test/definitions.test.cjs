@@ -101,6 +101,16 @@ test("composite fields link to their parts and are themselves declarations", () 
   assert.equal(source.slice(target.start, target.rangeEnd), 'Sequence = "{Episode}_{seqnum}"');
 });
 
+test("composite and resource templates accept inline declarations and multiline assignments", () => {
+  for (const gap of [" ", "\n", "\r\n// next field\r\n"]) {
+    for (const assignment of ['b = "{a}"', 'b\n =\n "{a}"', 'b = // template\n "{a}"']) {
+      const source = `a = one of "x"${gap}${assignment}\nresource item { name\n =\n "{b}" }`;
+      assert.deepEqual(targets(source, "{a}", 1), [0], source);
+      assert.deepEqual(targets(source, "{b}", 1), [source.indexOf(assignment)], source);
+    }
+  }
+});
+
 test("slots inside optional groups and folder-only resources still resolve", () => {
   const source = 'tag = text matching "[a-z]+"\nshot = text matching "[0-9]+"\nroots { a = "/a" }\n' +
     'resource scene { name = "{shot}[_{tag}].nk" location = "{root}/{shot}/{name}" }\n' +

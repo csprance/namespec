@@ -91,10 +91,12 @@ function readReport(report, text) {
   const seen = new Map();
   const examples = report.examples.map((example) => {
     const label = `${example.kind} ${example.resource}: ${example.input}`;
-    const count = (seen.get(label) ?? 0) + 1;
-    seen.set(label, count);
+    const identity = [example.kind, example.resource, example.source ?? "name", example.input];
+    const key = JSON.stringify(identity);
+    const count = (seen.get(key) ?? 0) + 1;
+    seen.set(key, count);
     return {
-      id: count > 1 ? `${label} (${count})` : label,
+      id: JSON.stringify([...identity, count]),
       label,
       range: where(example.span),
       passed: example.passed,

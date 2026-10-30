@@ -1,0 +1,57 @@
+name: Checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.10', '3.11', '3.12', '3.13', '3.14']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+      - run: uv sync --locked --all-extras
+      - run: uv run --locked --all-extras pytest -q
+      - run: uv run --locked --all-extras ruff check .
+      - run: uv run --locked --all-extras ruff format --check .
+      - run: uv build
+      # Keep locked test dependencies, replacing only the editable project with its wheel.
+      - name: Test installed wheel
+        shell: bash
+        run: |
+          uv pip install --no-deps --reinstall dist/*.whl
+          uv run --no-sync python -c "import namespec; assert 'site-packages' in namespec.__file__"
+          uv run --no-sync pytest -q
+
+  editor:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          python-version: '3.11'
+      - run: uv sync --locked --all-extras
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+      - run: npm ci
+        working-directory: editors/vscode
+      - run: npm test
+        working-directory: editors/vscode

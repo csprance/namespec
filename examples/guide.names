@@ -1,72 +1,107 @@
 spec 1
 
-// A small studio convention. The README builds this file up one idea at a time.
+// A complete, runnable companion to docs/guide.md. Start with the README for setup;
+// docs/reference.md lists every language rule, error code and Python operation.
+// From the repository root: uv run namespec examples/guide.names test
+// "spec 1" above selects the language version. Lines starting with // are comments.
 
-// Where jobs live on each platform. {root} in a location matches either one.
-roots {
-    mac     = "/Volumes/jobs"
-    windows = "J:/jobs"
-}
-
-// Paths pasted from Windows arrive with backslashes and sometimes a lowercase drive.
-normalize {
-    slashes = "forward"
-    drive   = "upper"
-}
-
-// FIELDS: what fits in each blank.
+// 1. Fields describe the changing parts of a name.
+// A text pattern checks the whole value. "examples" supplies sample values for
+// generation and checks them against the pattern; it does not restrict the allowed values.
 job       = text matching "[a-z0-9]+" examples "show17"
 asset     = text matching "[A-Z][a-z]+" examples "Donut", "Chair"
+// "one of" is a fixed, case-sensitive list of allowed strings.
 lod       = one of "low", "mid", "high"
+// Parse "004" as the number 4 and format 4 as "004". Padding is a minimum width,
+// so version 1000 still fits. An explicit upper bound is shown in advanced.names.
 version   = integer minimum 1 padded to 3 digits
 ext       = one of "abc", "usd"
+
+// 2. Composite fields give a name both its whole value and its smaller parts.
+// These identifiers stay text, preserving leading zeros such as shotnum = "0040".
 Episode   = text matching "[0-9]+" examples "101"
 seqnum    = text matching "[0-9]+" examples "120"
 shotnum   = text matching "[0-9]+" examples "0040"
 Sequence  = "{Episode}_{seqnum}"
 Shot      = "{Sequence}_{shotnum}"
+// Parsing Shot = "101_120_0040" also returns Sequence, Episode, seqnum and shotnum.
+// When generating a name, supply the whole Shot or its parts. If you supply both,
+// they must agree. Field names are case-sensitive: "Shot" is different from "shot".
 Task      = one of "comp", "anim", "light"
 tag       = text matching "[a-z]+" examples "jm"
 scene_ext = one of "nk", "ma"
+// A render frame stays text here because it accepts either four digits or "####".
+// The marker is just a spelling for another tool to interpret, not a number or a glob.
 frame     = text matching "[0-9]{4}|####" examples "####", "1001"
 image_ext = one of "exr", "png"
 
-// RESOURCES: each kind of name, and where it lives.
+// 3. Locations share explicit mount prefixes. Namespec does not inspect the disk.
+// A location beginning with {root} can parse either prefix. Parsing returns the path
+// prefix itself; generation accepts a root label such as "windows" or its path value.
+roots {
+    mac     = "/Volumes/jobs"
+    windows = "J:/jobs"
+}
+
+// Normalize locations pasted from Windows before matching. This changes backslashes
+// to forward slashes and drive letters to uppercase; it does not change filenames.
+normalize {
+    slashes = "forward"
+    drive   = "upper"
+}
+
+// 4. A resource describes one kind of filename, folder or full path.
+// Braces insert fields; everything between them is literal. This name reads
+// "Donut_high_v004.abc". A location's built-in {name} inserts that filename template.
+// Repeated fields must agree: the asset folder and the filename cannot name different assets.
 resource model {
     name     = "{asset}_{lod}_v{version}.{ext}"
     location = "{root}/{job}/assets/{asset}/{lod}/{name}"
+    // Metadata is data for a consuming tool. It neither changes matching nor queries ShotGrid.
     meta { entities = ["Asset"] kind = "publish" }
 }
 
+// Square brackets make the whole [_{tag}] segment optional, including its underscore.
+// An untagged scene has no "tag" field; it is not an empty string.
 resource scene {
     name     = "{Shot}_{Task}_v{version}[_{tag}].{scene_ext}"
     location = "{root}/{job}/shots/{Episode}/{Sequence}/{Shot}/{Task}/{name}"
     meta { entities = ["Episode", "Sequence", "Shot", "Task"] kind = "workfile" }
 }
 
+// Reuse the same shot, task and version fields for a related output.
+// The version folder and filename must agree, just like the repeated shot folders.
 resource render {
     name     = "{Shot}_{Task}_v{version}.{frame}.{image_ext}"
     location = "{root}/{job}/shots/{Episode}/{Sequence}/{Shot}/{Task}/renders/v{version}/{name}"
     meta { entities = ["Episode", "Sequence", "Shot", "Task", "Version"] kind = "render" }
 }
 
+// A location with no name describes a folder. catalog.parse(path) detects it;
+// scene.related("task_folder").path builds it. There is no basename to format.
 resource task_folder {
     location = "{root}/{job}/shots/{Episode}/{Sequence}/{Shot}/{Task}"
     meta { entities = ["Episode", "Sequence", "Shot", "Task"] kind = "folder" }
 }
 
-// EXAMPLES: the rules test themselves. Run `namespec examples/guide.names test`.
+// 5. Examples make this convention executable documentation.
+// "input" tests a basename; "location" tests a full path. An example must list every
+// returned field, with numbers unquoted and text quoted. A reject expects an error code.
+// The test command runs all nine blocks below and reports a line/column if one fails.
 example model {
     input = "Donut_high_v004.abc"
     expect { asset = "Donut" lod = "high" version = 4 ext = "abc" }
 }
+// A bad enum value and a valid number with the wrong spelling are different failures.
 reject model { input = "Donut_ultra_v004.abc" expect = "invalid_field" }
 reject model { input = "Donut_high_v4.abc" expect = "noncanonical_field" }
+// The folder says Chair while the file says Donut, so the repeated asset conflicts.
 reject model {
     location = "/Volumes/jobs/show17/assets/Chair/high/Donut_high_v004.abc"
     expect = "conflicting_field"
 }
 
+// Composite fields return both the complete codes and their individual parts.
 example scene {
     input = "101_120_0040_comp_v003_jm.nk"
     expect {
@@ -74,6 +109,7 @@ example scene {
         Task = "comp" version = 3 tag = "jm" scene_ext = "nk"
     }
 }
+// A full location also supplies root and job. With no optional tag, expect omits it.
 example scene {
     location = "/Volumes/jobs/show17/shots/101/101_120/101_120_0040/comp/101_120_0040_comp_v003.nk"
     expect {
@@ -82,11 +118,14 @@ example scene {
         Task = "comp" version = 3 scene_ext = "nk"
     }
 }
+// The sequence folder says 120, but the shot code says 125. The disagreement is
+// reported on seqnum, the leaf field inside both Sequence and Shot.
 reject scene {
     location = "/Volumes/jobs/show17/shots/101/101_120/101_125_0040/comp/101_125_0040_comp_v003.nk"
     expect = "conflicting_field"
 }
 
+// This path uses the Windows root and a frame marker. No file needs to exist.
 example render {
     location = "J:/jobs/show17/shots/101/101_120/101_120_0040/comp/renders/v003/101_120_0040_comp_v003.####.exr"
     expect {
@@ -96,6 +135,7 @@ example render {
     }
 }
 
+// Folder resources use exactly the same location validation and composite checks.
 example task_folder {
     location = "J:/jobs/show17/shots/101/101_120/101_120_0040/comp"
     expect {

@@ -3,30 +3,28 @@
   "name": "Namespec",
   "scopeName": "source.namespec",
   "patterns": [
-    { "include": "#comments" },
-    { "include": "#templates" },
-    { "include": "#strings" },
     {
-      "match": "\\b(resource|example|reject)\\s+([A-Za-z_][A-Za-z0-9_]*)",
-      "captures": {
-        "1": { "name": "keyword.declaration.namespec" },
-        "2": { "name": "entity.name.type.namespec" }
-      }
+      "include": "#comments"
     },
-    { "match": "\\b(?:text|integer)\\b", "name": "storage.type.namespec" },
     {
-      "match": "\\b(?:spec|matching|examples|minimum|padded|to|digits|one|of|readers|roots|normalize|meta|expect)\\b",
+      "include": "#resources"
+    },
+    {
+      "include": "#examples"
+    },
+    {
+      "include": "#blocks"
+    },
+    {
+      "match": "\\bspec\\b",
       "name": "keyword.control.namespec"
     },
     {
-      "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*=)",
-      "name": "variable.other.property.namespec"
+      "include": "#fields"
     },
-    { "match": "\\b[0-9]+\\b", "name": "constant.numeric.namespec" },
-    { "match": "=", "name": "keyword.operator.assignment.namespec" },
-    { "match": "[{}\\[\\]]", "name": "punctuation.section.braces.namespec" },
-    { "match": ",", "name": "punctuation.separator.namespec" },
-    { "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b", "name": "variable.other.namespec" }
+    {
+      "include": "#values"
+    }
   ],
   "repository": {
     "comments": {
@@ -34,49 +32,207 @@
       "begin": "//",
       "end": "$"
     },
-    "templates": {
+    "resources": {
+      "begin": "\\b(resource)\\b",
+      "end": "\\}",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.declaration.namespec"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.braces.namespec"
+        }
+      },
       "patterns": [
         {
-          "comment": "Resource name and location templates, wherever they appear on a line.",
-          "name": "meta.assignment.template.namespec",
-          "begin": "\\b(name|location)\\s*(=)\\s*([\"'])",
-          "beginCaptures": {
-            "1": { "name": "variable.other.property.namespec" },
-            "2": { "name": "keyword.operator.assignment.namespec" },
-            "3": { "name": "punctuation.definition.string.begin.namespec" }
-          },
-          "end": "\\3",
-          "endCaptures": { "0": { "name": "punctuation.definition.string.end.namespec" } },
-          "contentName": "string.quoted.template.namespec",
-          "patterns": [{ "include": "#slots" }]
+          "include": "#comments"
         },
         {
-          "comment": "Composite field declarations such as Shot = \"{Sequence}_{shotnum}\" start a line. Keyword-led entries (input, expect) stay plain strings.",
-          "name": "meta.assignment.template.namespec",
-          "begin": "^\\s*(?!(?:spec|input|expect|resource|example|reject|readers|roots|meta)\\b)([A-Za-z_][A-Za-z0-9_]*)\\s*(=)\\s*([\"'])",
+          "include": "#blocks"
+        },
+        {
+          "begin": "\\b(name|location)\\b(?=\\s*(?:=|$))",
+          "end": "(?=\\S)",
+          "applyEndPatternLast": true,
           "beginCaptures": {
-            "1": { "name": "variable.other.property.namespec" },
-            "2": { "name": "keyword.operator.assignment.namespec" },
-            "3": { "name": "punctuation.definition.string.begin.namespec" }
+            "1": {
+              "name": "variable.other.property.namespec"
+            }
           },
-          "end": "\\3",
-          "endCaptures": { "0": { "name": "punctuation.definition.string.end.namespec" } },
-          "contentName": "string.quoted.template.namespec",
-          "patterns": [{ "include": "#slots" }]
+          "patterns": [
+            {
+              "include": "#comments"
+            },
+            {
+              "match": "=",
+              "name": "keyword.operator.assignment.namespec"
+            },
+            {
+              "include": "#template"
+            }
+          ]
+        },
+        {
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*(?:\\{|$))",
+          "name": "entity.name.type.namespec"
+        },
+        {
+          "include": "#values"
+        }
+      ]
+    },
+    "examples": {
+      "begin": "\\b(example|reject)\\b",
+      "end": "\\}",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.declaration.namespec"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.braces.namespec"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#blocks"
+        },
+        {
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*(?:\\{|$))",
+          "name": "entity.name.type.namespec"
+        },
+        {
+          "include": "#values"
+        }
+      ]
+    },
+    "blocks": {
+      "begin": "\\b(readers|roots|normalize|meta|expect)\\b(?=\\s*(?:\\{|$))",
+      "end": "\\}",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.namespec"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.braces.namespec"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#values"
+        }
+      ]
+    },
+    "fields": {
+      "comment": "Only top-level declarations accept composite templates. Start at the identifier so equals and the value may follow on later lines.",
+      "begin": "\\b(?!(?:input|expect)\\b)([A-Za-z_][A-Za-z0-9_]*)\\b",
+      "end": "(?=\\S)",
+      "applyEndPatternLast": true,
+      "beginCaptures": {
+        "1": {
+          "name": "variable.other.property.namespec"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "match": "=",
+          "name": "keyword.operator.assignment.namespec"
+        },
+        {
+          "begin": "\\b(text|integer|one)\\b",
+          "end": "(?=\\S)",
+          "applyEndPatternLast": true,
+          "beginCaptures": {
+            "1": {
+              "name": "storage.type.namespec"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#comments"
+            },
+            {
+              "include": "#strings"
+            },
+            {
+              "match": "\\b(?:matching|examples|minimum|maximum|padded|to|digits|of)\\b",
+              "name": "keyword.control.namespec"
+            },
+            {
+              "match": "-?[0-9]+",
+              "name": "constant.numeric.namespec"
+            },
+            {
+              "match": ",",
+              "name": "punctuation.separator.namespec"
+            }
+          ]
+        },
+        {
+          "include": "#template"
+        }
+      ]
+    },
+    "template": {
+      "name": "meta.assignment.template.namespec",
+      "begin": "([\"'])",
+      "end": "\\1",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.string.begin.namespec"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.namespec"
+        }
+      },
+      "contentName": "string.quoted.template.namespec",
+      "patterns": [
+        {
+          "include": "#slots"
         }
       ]
     },
     "slots": {
       "patterns": [
-        { "include": "#escapes" },
-        { "match": "\\{\\{|\\}\\}", "name": "constant.character.escape.namespec" },
-        { "match": "[\\[\\]]", "name": "punctuation.section.optional.namespec" },
+        {
+          "include": "#escapes"
+        },
+        {
+          "match": "\\{\\{|\\}\\}|\\[\\[|\\]\\]",
+          "name": "constant.character.escape.namespec"
+        },
+        {
+          "match": "[\\[\\]]",
+          "name": "punctuation.section.optional.namespec"
+        },
         {
           "match": "(\\{)([A-Za-z_][A-Za-z0-9_]*)(\\})",
           "captures": {
-            "1": { "name": "punctuation.definition.interpolation.begin.namespec" },
-            "2": { "name": "variable.parameter.namespec" },
-            "3": { "name": "punctuation.definition.interpolation.end.namespec" }
+            "1": {
+              "name": "punctuation.definition.interpolation.begin.namespec"
+            },
+            "2": {
+              "name": "variable.parameter.namespec"
+            },
+            "3": {
+              "name": "punctuation.definition.interpolation.end.namespec"
+            }
           }
         }
       ]
@@ -87,16 +243,66 @@
           "name": "string.quoted.double.namespec",
           "begin": "\"",
           "end": "\"",
-          "patterns": [{ "include": "#escapes" }]
+          "patterns": [
+            {
+              "include": "#escapes"
+            }
+          ]
         },
         {
           "name": "string.quoted.single.namespec",
           "begin": "'",
           "end": "'",
-          "patterns": [{ "include": "#escapes" }]
+          "patterns": [
+            {
+              "include": "#escapes"
+            }
+          ]
         }
       ]
     },
-    "escapes": { "match": "\\\\.", "name": "constant.character.escape.namespec" }
+    "values": {
+      "patterns": [
+        {
+          "include": "#strings"
+        },
+        {
+          "match": "\\b(?:text|integer)\\b",
+          "name": "storage.type.namespec"
+        },
+        {
+          "match": "\\b(?:spec|matching|examples|minimum|maximum|padded|to|digits|one|of|readers|roots|normalize|meta|expect)\\b",
+          "name": "keyword.control.namespec"
+        },
+        {
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*=)",
+          "name": "variable.other.property.namespec"
+        },
+        {
+          "match": "-?[0-9]+",
+          "name": "constant.numeric.namespec"
+        },
+        {
+          "match": "=",
+          "name": "keyword.operator.assignment.namespec"
+        },
+        {
+          "match": "[{}\\[\\]]",
+          "name": "punctuation.section.braces.namespec"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.namespec"
+        },
+        {
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b",
+          "name": "variable.other.namespec"
+        }
+      ]
+    },
+    "escapes": {
+      "match": "\\\\.",
+      "name": "constant.character.escape.namespec"
+    }
   }
 }

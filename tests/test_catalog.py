@@ -128,7 +128,7 @@ def test_reader_is_explicit_and_uses_supplied_metadata(tmp_path):
             "duplicate_definition",
         ),
         ('spec 1 resource a { name = "{x}" } x = one of "a", "a"', "duplicate_choice"),
-        ('spec 1 resource a { name = "{x}" } x = integer minimum -1', "invalid_integer"),
+        ('spec 1 resource a { name = "{x}" } x = integer minimum 1 maximum 0', "invalid_integer"),
         ('spec 1 resource a { name = "{x}" } x = text matching "a" examples "b"', "invalid_sample"),
         (
             'spec 1 resource a { name = "{x}" reader = readers[x] } x = one of "abc"',

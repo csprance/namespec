@@ -1,0 +1,63 @@
+spec 1
+
+// A companion to examples/guide.names and the later sections of docs/guide.md.
+// Read docs/reference.md for exact matching, numeric and optional-group rules.
+// From the repository root: uv run namespec examples/advanced.names test
+
+// 1. A text rule keeps Python regex semantics when used inside a larger template.
+// (?i) permits either letter case; ^ and $ apply to this field alone, not the full path.
+// Matching preserves the spelling supplied, so "Sky_Depot" stays "Sky_Depot".
+// The two word parts may contain letters but no extra underscores.
+asset = text matching "(?i)^[a-z]+_[a-z]+$" examples "Sky_Depot"
+artist = one of "jm", "sr"
+purpose = one of "wip", "review"
+
+// 2. Bounds and padding express different constraints. Maximum 999 is inclusive;
+// padding to three digits alone would still allow a four-digit version.
+version = integer minimum 1 maximum 999 padded to 3 digits
+// A negative minimum allows a minus sign. Padding counts digits, excluding the sign:
+// frame -1 becomes "-0001", while frame 10 becomes "0010". There is no leading plus.
+frame = integer minimum -100 maximum 9999 padded to 4 digits
+
+// 3. This optional group contains two fields. Supply both artist and purpose to
+// include it, or neither to omit the entire suffix. Supplying just one is an error.
+// "asset" is the base text; "Asset" is a different field that includes the optional suffix.
+Asset = "{asset}[_{artist}_{purpose}]"
+
+// Root declarations and input locations use the same normalization. The lowercase
+// declaration below is generated and returned as "J:/jobs" because drive = "upper".
+roots { windows = "j:/jobs" linux = "/jobs" }
+normalize { drive = "upper" slashes = "forward" }
+
+// The folder uses the base asset; the filename may also include artist and purpose.
+// The asset captured inside Asset must agree with the repeated asset folder.
+resource render {
+    name = "{Asset}_v{version}.{frame}.exr"
+    location = "{root}/{asset}/renders/{name}"
+}
+
+// 4. Double brackets are literal brackets, just as double braces are literal braces.
+// "[[{asset}]]" becomes "[Sky_Depot]". It is not an optional group.
+resource labelled { name = "[[{asset}]]_v{version}.abc" }
+
+// 5. Four executable examples cover the forms above. Run the test command after editing.
+// With the optional suffix absent, expect contains asset and Asset, but no artist/purpose.
+example render {
+    input = "Sky_Depot_v001.-0001.exr"
+    expect { asset = "Sky_Depot" Asset = "Sky_Depot" version = 1 frame = -1 }
+}
+// This example supplies the complete suffix and verifies normalized root spelling.
+example render {
+    location = "j:/jobs/Sky_Depot/renders/Sky_Depot_jm_review_v002.0010.exr"
+    expect {
+        root = "J:/jobs" asset = "Sky_Depot" artist = "jm" purpose = "review"
+        Asset = "Sky_Depot_jm_review" version = 2 frame = 10
+    }
+}
+// Four digits are structurally readable, but 1000 exceeds the declared maximum.
+reject render { input = "Sky_Depot_v1000.0001.exr" expect = "invalid_field" }
+// Literal brackets appear once each in the resulting filename.
+example labelled {
+    input = "[Sky_Depot]_v001.abc"
+    expect { asset = "Sky_Depot" version = 1 }
+}

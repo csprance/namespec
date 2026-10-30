@@ -41,7 +41,11 @@ test("unloadable rules keep their problems and report no examples", () => {
 test("repeated examples get distinct, stable ids", () => {
   const example = { kind: "reject", resource: "model", input: "x", passed: true, span: [0, 1], failures: [] };
   const { examples } = readReport({ examples: [example, example] }, "x");
-  assert.deepEqual(examples.map((item) => item.id), ["reject model: x", "reject model: x (2)"]);
+  assert.deepEqual(examples.map((item) => JSON.parse(item.id)), [
+    ["reject", "model", "name", "x", 1], ["reject", "model", "name", "x", 2],
+  ]);
+  const variants = [example, example, { ...example, input: "x (2)" }, { ...example, source: "location" }];
+  assert.equal(new Set(readReport({ examples: variants }, "x").examples.map((item) => item.id)).size, 4);
 });
 
 const live = fs.existsSync(CLI) ? test : test.skip;

@@ -101,9 +101,8 @@ def test_resource_entries_in_any_order_and_integers_may_be_negative():
     assert [d.code for d in diagnostics('spec 1 r { name = "{x}" } x = integer minimum -1')] == [
         "syntax_error"
     ]
-    assert [
-        d.code for d in diagnostics('spec 1 resource r { name = "{x}" } x = integer minimum -1')
-    ] == ["invalid_integer"]
+    signed = Catalog.from_string('spec 1 resource r { name = "{x}" } x = integer minimum -1')
+    assert signed.definition.fields["x"].minimum == -1
 
 
 R = 'x = one of "a" resource r { name = "{x}" }'

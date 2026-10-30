@@ -52,6 +52,17 @@ test("escaped quotes stay inside strings and escaped braces are literal", () => 
   assert.ok(scopesAt(line, "after").includes("comment.line.double-slash.namespec"));
 });
 
+test("signed integer bounds and literal template brackets have their own scopes", () => {
+  const field = "frame = integer minimum -10 maximum 100 padded to 4 digits";
+  assert.ok(scopesAt(field, "maximum").includes("keyword.control.namespec"));
+  assert.ok(scopesAt(field, "-10").includes("constant.numeric.namespec"));
+  const line = 'name = "[[{frame}]][_{tag}]"';
+  assert.ok(scopesAt(line, "[[").includes("constant.character.escape.namespec"));
+  assert.ok(scopesAt(line, "]]").includes("constant.character.escape.namespec"));
+  assert.ok(scopesAt(line, "[_{tag}").includes("punctuation.section.optional.namespec"));
+  assert.ok(scopesAt(line, "frame").includes("variable.parameter.namespec"));
+});
+
 test("composite fields, roots and meta use template and keyword scopes", () => {
   const composite = 'Shot = "{Sequence}_{shotnum}" // shot identity';
   assert.ok(scopesAt(composite, "Shot").includes("variable.other.property.namespec"));

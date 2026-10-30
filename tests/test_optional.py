@@ -106,7 +106,7 @@ def test_format_omits_absent_groups_and_requires_a_started_group(catalog):
         "0010_mask_jm.nk"
     )
     location = catalog.locate("render", base, root="mac", render_ext="mov", description="mask")
-    assert location.endswith("/renders/0010_comp_mask_v001/0010_comp_mask_v001.mov")
+    assert location.as_posix().endswith("/renders/0010_comp_mask_v001/0010_comp_mask_v001.mov")
 
 
 def test_samples_cover_both_forms(catalog):
@@ -138,15 +138,15 @@ def test_folder_resources_only_have_locations(catalog):
     assert folder.kind == "task_folder"
     assert folder.fields == {"root": "/Volumes", "Shot": "0010", "Task": "comp"}
     assert folder.metadata == {"kind": "folder"}
-    assert folder.locate() == "/Volumes/shots/0010/work/comp"
-    assert catalog.locate("task_folder", root="win", Shot="0020", Task="anim") == (
+    assert folder.locate().as_posix() == "/Volumes/shots/0010/work/comp"
+    assert catalog.locate("task_folder", root="win", Shot="0020", Task="anim").as_posix() == (
         "C:/projects/shots/0020/work/anim"
     )
     for call in (
         lambda: folder.name,
         lambda: catalog.format("task_folder", Shot="0010", Task="comp"),
         lambda: list(catalog.samples("task_folder")),
-        lambda: catalog.validate("x", "task_folder"),
+        lambda: catalog.validate("x", "task_folder", source="name"),
     ):
         with pytest.raises(NameSpecError) as exc:
             call()
@@ -160,12 +160,13 @@ def test_normalize_applies_to_locations_only(catalog):
     canonical = "C:/projects/shots/0010/work/comp/scenes/0010_comp_v001.nk"
     assert catalog.normalize(windows) == canonical
     resource = catalog.parse(windows, source="location")
-    assert resource.fields["root"] == "C:/projects" and resource.locate() == canonical
+    assert resource.fields["root"] == "C:/projects" and resource.locate().as_posix() == canonical
     assert catalog.validate(windows, "scene", source="location").input == canonical
     assert catalog.inspect(windows, source="location").status == "valid"
     assert catalog.normalize("a\\b", "name") == "a\\b"
     assert (
-        catalog.validate("0010_comp_v001.nk\\", "scene").diagnostics[0].code == "pattern_mismatch"
+        catalog.validate("0010_comp_v001.nk\\", "scene", source="name").diagnostics[0].code
+        == "pattern_mismatch"
     )
     strict = Catalog.from_string(
         SOURCE.replace('slashes = "forward"', "").replace('drive = "upper"', "")

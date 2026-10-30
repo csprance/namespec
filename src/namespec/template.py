@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
+from functools import cache
 from string import Formatter
 from typing import Any
 
@@ -25,9 +26,14 @@ def field_value(spec: FieldSpec, value: Any, *, parsing: bool) -> str | int:
         fail("missing_field", f"Missing {spec.name!r}.", **details)
     if spec.kind == "integer":
         if parsing:
-            if not re.fullmatch(r"[0-9]+", value):
+            if not re.fullmatch(slot_pattern(spec), value):
                 fail("invalid_field", f"{spec.name!r} must contain ASCII digits.", **details)
-            number = int(value)
+            try:
+                number = int(value)
+            except ValueError:
+                fail(
+                    "invalid_integer", f"{spec.name!r} exceeds the integer digit limit.", **details
+                )
         elif type(value) is int:
             number = value
         else:
@@ -39,11 +45,19 @@ def field_value(spec: FieldSpec, value: Any, *, parsing: bool) -> str | int:
                 expected=spec.minimum,
                 **details,
             )
-        if parsing and value != str(number).zfill(spec.width):
+        if spec.maximum is not None and number > spec.maximum:
+            fail(
+                "invalid_field",
+                f"{spec.name!r} must be at most {spec.maximum}.",
+                expected=spec.maximum,
+                **details,
+            )
+        canonical = spelling(spec, number)
+        if parsing and value != canonical:
             fail(
                 "noncanonical_field",
                 f"{spec.name!r} must use canonical numeric padding.",
-                expected=str(number).zfill(spec.width),
+                expected=canonical,
                 **details,
             )
         return number
@@ -63,12 +77,20 @@ def field_value(spec: FieldSpec, value: Any, *, parsing: bool) -> str | int:
             expected=spec.pattern,
             **details,
         )
+    if any(character in PATH_SEPARATORS for character in value):
+        fail("reserved_separator", f"{spec.name!r} contains a path separator.", **details)
     return value
 
 
 def spelling(spec: FieldSpec, value: str | int) -> str:
     """The canonical text of a logical value inside a name."""
-    return str(value).zfill(spec.width) if spec.kind == "integer" else value
+    if spec.kind != "integer":
+        return value
+    try:
+        digits = str(abs(value)).zfill(spec.width)
+    except (ValueError, OverflowError):
+        fail("invalid_integer", f"{spec.name!r} exceeds the integer digit limit.", field=spec.name)
+    return ("-" if value < 0 else "") + digits
 
 
 def parse_parts(text: str) -> list[tuple[str, str | None, str | None, str | None]]:
@@ -79,11 +101,17 @@ def parse_parts(text: str) -> list[tuple[str, str | None, str | None, str | None
 
 
 def split_groups(text: str) -> list[tuple[str, bool]]:
-    """Split a template into plain and optional ``[...]`` segments. Groups do not nest."""
+    """Split optional groups, with ``[[`` and ``]]`` spelling literal brackets."""
     segments: list[tuple[str, bool]] = []
     current: list[str] = []
     inside = False
-    for character in text:
+    index = 0
+    while index < len(text):
+        character = text[index]
+        if character in "[]" and text[index : index + 2] == character * 2:
+            current.append(character)
+            index += 2
+            continue
         if character == "[":
             if inside:
                 fail("invalid_template", f"Optional groups cannot nest in {text!r}.")
@@ -96,6 +124,7 @@ def split_groups(text: str) -> list[tuple[str, bool]]:
             current, inside = [], False
         else:
             current.append(character)
+        index += 1
     if inside:
         fail("invalid_template", f"Unmatched '[' in {text!r}.")
     segments.append(("".join(current), False))
@@ -109,7 +138,7 @@ def has_punctuation(literal: str) -> bool:
 def slot_pattern(spec: FieldSpec) -> str:
     """The regex a field's own rule implies, for the precise template pattern."""
     if spec.kind == "integer":
-        return "[0-9]+"
+        return "-?[0-9]+" if spec.minimum < 0 else "[0-9]+"
     if spec.kind == "enum":
         return "|".join(map(re.escape, spec.choices))
     return spec.pattern or ""
@@ -122,7 +151,7 @@ def may_contain(spec: FieldSpec, characters: frozenset[str]) -> bool:
     backtracking on the few fields whose rule crosses the template's punctuation.
     """
     if spec.kind == "integer":
-        return False
+        return spec.minimum < 0 and "-" in characters
     if spec.kind == "enum":
         return any(character in choice for choice in spec.choices for character in characters)
     return pattern_may_match(spec.pattern or "", characters)
@@ -213,6 +242,50 @@ def _category(category: Any, character: str) -> bool:
 PATH_SEPARATORS = frozenset({"/", "\\", "\n", "\r"})
 
 
+def needs_isolation(pattern: str) -> bool:
+    """Context assertions, flags and captures must see the field alone.
+
+    Named captures cannot repeat in a combined regex, numeric references change their
+    target after wrapping, and anchors/lookarounds otherwise inspect neighboring fields.
+    """
+    if re.compile(pattern).groupindex or re.search(r"\(\?[aiLmsux]+\)", pattern):
+        return True
+    return _has_context(_sre.parse(pattern))
+
+
+def _has_context(items: Any) -> bool:
+    for op, av in items:
+        if op in (_sre.AT, _sre.ASSERT, _sre.ASSERT_NOT, _sre.GROUPREF, _sre.GROUPREF_EXISTS):
+            return True
+        if op in (_sre.MAX_REPEAT, _sre.MIN_REPEAT, getattr(_sre, "POSSESSIVE_REPEAT", None)):
+            if _has_context(av[2]):
+                return True
+        elif op is _sre.SUBPATTERN:
+            if _has_context(av[3]):
+                return True
+        elif op is getattr(_sre, "ATOMIC_GROUP", None):
+            if _has_context(av):
+                return True
+        elif op is _sre.BRANCH and any(_has_context(branch) for branch in av[1]):
+            return True
+    return False
+
+
+@dataclass(frozen=True)
+class Captures:
+    """The small part of a regex match needed by the shared validation pass."""
+
+    text: str
+    spans: dict[str, tuple[int, int]]
+
+    def __getitem__(self, key: str) -> str | None:
+        span = self.spans.get(key)
+        return self.text[slice(*span)] if span is not None else None
+
+    def span(self, key: str) -> tuple[int, int]:
+        return self.spans.get(key, (-1, -1))
+
+
 @dataclass(frozen=True)
 class Slot:
     """One captured leaf field, the composite it was expanded from, and its optional group."""
@@ -239,10 +312,10 @@ class Group:
 
 
 class Template:
-    """Literal text, {field} slots and optional [..] groups. Delimiters are reserved in values.
+    """Literal text, {field} slots and optional [..] groups with field diagnostics.
 
-    Reserving delimiters keeps structural extraction independent of field validation:
-    a misspelled enum can still be attached to the correct field, without guessing.
+    Fields may contain template punctuation when their rules allow it. A second reading
+    accepts punctuation-free invalid values so a misspelled enum gets a field diagnostic.
     Composite fields expand to their parts before the pattern is built, so a `{Shot}` slot
     captures `Episode`, `seqnum` and `shotnum` separately and repeats are checked per part.
     `{root}` is a location-only prefix matched against the declared roots as literals.
@@ -250,7 +323,12 @@ class Template:
     """
 
     def __init__(
-        self, text: str, fields: dict[str, FieldSpec], *, roots: Mapping[str, str] | None = None
+        self,
+        text: str,
+        fields: Mapping[str, FieldSpec],
+        *,
+        roots: Mapping[str, str] | None = None,
+        composite_cache: dict[str, Template] | None = None,
     ):
         self.text = text
         self.fields = fields
@@ -286,6 +364,15 @@ class Template:
             if not character.isalnum()
         }
         self.delimiters = frozenset(punctuation | PATH_SEPARATORS)
+        self._rules = {
+            name: re.compile(slot_pattern(fields[name])) for name in dict.fromkeys(self.names)
+        }
+        self._isolated_fields = {
+            name
+            for name in self._rules
+            if fields[name].kind == "text" and needs_isolation(fields[name].pattern)
+        }
+        isolated = bool(self._isolated_fields)
         # One matcher, two attempts. The precise pattern pastes each field's own rule into its
         # slot, so a value may contain the template's punctuation when its rule allows it, and
         # a correct name reads exactly as one regex built from the rules would. It is the only
@@ -313,7 +400,7 @@ class Template:
                 loose.append(")?")
             else:
                 spec = fields[piece.name]
-                rule = slot_pattern(spec)
+                rule = allowed if isolated else slot_pattern(spec)
                 precise.append(f"(?P<f{index}>(?:{rule}))")
                 # A rule that stays inside the punctuation is covered by the chunk already;
                 # only a rule that can cross it needs its own branch (and the backtracking).
@@ -322,12 +409,27 @@ class Template:
                 else:
                     loose.append(f"(?P<f{index}>{allowed})")
                 index += 1
-        self.regex = re.compile("".join(precise))
-        self.fallback_regex = re.compile("".join(loose))
-        # A composite's joined value is its own template rendered from the parts.
-        self._composite_templates = {
-            name: Template(fields[name].template, fields) for name in self.composites
+        self.regex = None if isolated else re.compile("".join(precise))
+        self.fallback_regex = None if isolated else re.compile("".join(loose))
+        self._group_ends = {
+            piece.index: index
+            for index, piece in enumerate(self._pieces)
+            if isinstance(piece, GroupEnd)
         }
+        self._slot_indices = {
+            index: slot_index
+            for slot_index, index in enumerate(
+                index for index, piece in enumerate(self._pieces) if isinstance(piece, Slot)
+            )
+        }
+        # Share each standalone composite across the catalog. A deep chain otherwise
+        # recompiles all of its ancestors once per ancestor, causing exponential work.
+        compiled = composite_cache if composite_cache is not None else {}
+        self._composite_templates: dict[str, Template] = {}
+        for name in self.composites:
+            if name not in compiled:
+                compiled[name] = Template(fields[name].template, fields, composite_cache=compiled)
+            self._composite_templates[name] = compiled[name]
 
     def _expand(self, text: str, composite: str | None, chain: tuple[str, ...]) -> None:
         for segment, optional in split_groups(text):
@@ -399,9 +501,150 @@ class Template:
             self._pieces.append(slot)
             self.slots.append(slot)
 
+    def _match_isolated(
+        self, text: str, *, loose: bool = False, allow_separators: bool = False
+    ) -> Captures | None:
+        """Match context-sensitive rules against candidate field slices, never the full path.
+
+        Composable rules keep their regex preference; isolated rules try longest boundaries
+        first. Memoization is safe because field regexes cannot read other captures.
+        Repeated-value agreement is checked afterward. Literal boundaries avoid scanning
+        every substring of a long location.
+        """
+
+        @cache
+        def following(index: int) -> tuple[str | None, ...]:
+            if index == len(self._pieces):
+                return (None,)
+            piece = self._pieces[index]
+            if isinstance(piece, str):
+                return (piece,) if piece else following(index + 1)
+            if isinstance(piece, GroupEnd):
+                return following(index + 1)
+            if isinstance(piece, GroupStart):
+                return tuple(
+                    dict.fromkeys(
+                        (*following(index + 1), *following(self._group_ends[piece.index] + 1))
+                    )
+                )
+            return ("",)  # Defensive: adjacent slots are rejected during expansion.
+
+        @cache
+        def matches(name: str, start: int, end: int) -> bool:
+            return self._rules[name].fullmatch(text[start:end]) is not None
+
+        def preferred_ends(name: str, start: int, endpoints: set[int]):
+            if name in self._isolated_fields:
+                yield from (
+                    end for end in sorted(endpoints, reverse=True) if matches(name, start, end)
+                )
+                return
+            # Let the regex engine retain lazy quantifiers and alternative ordering even
+            # when another field needs isolated matching. The lookahead only restricts
+            # the allowed end positions, leaving the field expression's preference intact.
+            remaining = set(endpoints)
+            while remaining:
+                if len(remaining) == 1:
+                    end = next(iter(remaining))
+                    if matches(name, start, end):
+                        yield end
+                    return
+                tails = "|".join(r"[\s\S]{" + str(len(text) - end) + "}" for end in remaining)
+                rule = "(?:" + self._rules[name].pattern + ")(?=(?:" + tails + r")\Z)"
+                match = re.compile(rule).match(text, start)
+                if match is None:
+                    return
+                end = match.end()
+                yield end
+                remaining.remove(end)
+
+        @cache
+        def search(index: int, start: int) -> tuple[tuple[str, int, int], ...] | None:
+            if index == len(self._pieces):
+                return () if start == len(text) else None
+            piece = self._pieces[index]
+            if isinstance(piece, str):
+                return (
+                    search(index + 1, start + len(piece)) if text.startswith(piece, start) else None
+                )
+            if isinstance(piece, GroupEnd):
+                return search(index + 1, start)
+            if isinstance(piece, GroupStart):
+                present = search(index + 1, start)
+                return (
+                    present
+                    if present is not None
+                    else search(self._group_ends[piece.index] + 1, start)
+                )
+            endpoints: set[int] = set()
+            for literal in following(index + 1):
+                if literal is None:
+                    endpoints.add(len(text))
+                elif not literal:
+                    endpoints.update(range(start, len(text) + 1))
+                else:
+                    end = text.find(literal, start)
+                    while end != -1:
+                        endpoints.add(end)
+                        end = text.find(literal, end + 1)
+            if not allow_separators:
+                endpoints = {
+                    end
+                    for end in endpoints
+                    if not any(character in PATH_SEPARATORS for character in text[start:end])
+                }
+            # Keep valid field readings ahead of the diagnostic punctuation-free branch.
+            for exact in (True, False) if loose else (True,):
+                ordered = (
+                    preferred_ends(piece.name, start, endpoints)
+                    if exact
+                    else sorted(endpoints, reverse=True)
+                )
+                for end in ordered:
+                    if not exact and (
+                        matches(piece.name, start, end)
+                        or any(character in self.delimiters for character in text[start:end])
+                    ):
+                        continue
+                    remaining = search(index + 1, end)
+                    if remaining is not None:
+                        key = f"f{self._slot_indices[index]}"
+                        return ((key, start, end), *remaining)
+            return None
+
+        roots = sorted(self.roots.values(), key=len, reverse=True) if self.has_root else ("",)
+        for root in roots:
+            if not text.startswith(root):
+                continue
+            found = search(0, len(root))
+            if found is not None:
+                spans = {key: (start, end) for key, start, end in found}
+                if self.has_root:
+                    spans[ROOT] = (0, len(root))
+                return Captures(text, spans)
+        return None
+
     def validate(self, text: str, resource: str, source: str = "name") -> Validation:
-        match = self.regex.fullmatch(text) or self.fallback_regex.fullmatch(text)
-        if not match:
+        if self.regex is None:
+            match = self._match_isolated(text) or self._match_isolated(text, loose=True)
+            if match is None:
+                match = self._match_isolated(text, allow_separators=True) or self._match_isolated(
+                    text, loose=True, allow_separators=True
+                )
+        else:
+            match = self.regex.fullmatch(text) or self.fallback_regex.fullmatch(text)
+            if match is not None and any(
+                character in PATH_SEPARATORS
+                for index in range(len(self.slots))
+                for character in (match[f"f{index}"] or "")
+            ):
+                # A permissive field must not consume the slash of a valid optional path
+                # component. Keep the old reading only if no separator-free reading fits,
+                # so genuinely invalid values still receive a reserved_separator error.
+                match = (
+                    self._match_isolated(text) or self._match_isolated(text, loose=True) or match
+                )
+        if match is None:
             return Validation(
                 resource,
                 text,
@@ -469,17 +712,35 @@ class Template:
         for name in conflicts:
             values.pop(name, None)
         for name in self.composites:
+            if self._leaves_of[name] & conflicts:
+                continue
             try:
-                values[name] = self._composite_templates[name].format(values)
+                parts = {part: values[part] for part in self._leaves_of[name] if part in values}
+                values[name] = self._composite_templates[name].format(parts)
             except NameSpecError:
                 pass  # A part is missing, invalid or conflicting; the whole is omitted too.
         return Validation(resource, text, values, tuple(diagnostics), source)
 
-    def format(self, values: Mapping[str, Any]) -> str:
+    def _resolve_values(
+        self, values: Mapping[str, Any]
+    ) -> tuple[dict[str, Any], list[Diagnostic], set[str]]:
         working = dict(values)
-        rendered: dict[str, str] = {}
         diagnostics: list[Diagnostic] = []
         explained: set[str] = set()
+        for name in self.composites:
+            if name in values and values[name] is None:
+                for part in self._composite_templates[name].produced:
+                    if values.get(part) is not None:
+                        diagnostics.append(
+                            Diagnostic(
+                                "conflicting_field",
+                                f"{part!r} was supplied while {name!r} was explicitly removed.",
+                                field=part,
+                                expected=None,
+                                actual=values[part],
+                                composite=name,
+                            )
+                        )
         # Outer composites first, so a whole Shot supplies Sequence before Sequence is checked.
         for name in reversed(self.composites):
             value = working.get(name)
@@ -494,7 +755,18 @@ class Template:
                 continue
             for part, part_value in parts.items():
                 given = working.get(part)
-                if given is None:
+                if part in self.composites and part in values and values[part] is None:
+                    diagnostics.append(
+                        Diagnostic(
+                            "conflicting_field",
+                            f"{name!r} supplies the explicitly removed composite {part!r}.",
+                            field=part,
+                            expected=None,
+                            actual=part_value,
+                            composite=name,
+                        )
+                    )
+                elif given is None:
                     working[part] = part_value
                 elif given != part_value or type(given) is not type(part_value):
                     diagnostics.append(
@@ -507,6 +779,18 @@ class Template:
                             composite=name,
                         )
                     )
+        return working, diagnostics, explained
+
+    def resolve_values(self, values: Mapping[str, Any]) -> dict[str, Any]:
+        """Expand supplied composite values, rejecting disagreements with supplied parts."""
+        working, diagnostics, _ = self._resolve_values(values)
+        if diagnostics:
+            raise NameSpecError(diagnostics)
+        return working
+
+    def format(self, values: Mapping[str, Any], *, strict: bool = False) -> str:
+        working, diagnostics, explained = self._resolve_values(values)
+        rendered: dict[str, str] = {}
         if self.has_root:
             try:
                 rendered[ROOT] = self._root_value(working.get(ROOT))
@@ -528,13 +812,6 @@ class Template:
                 continue
             try:
                 text = spelling(spec, field_value(spec, working.get(name), parsing=False))
-                if any(character in PATH_SEPARATORS for character in text):
-                    fail(
-                        "reserved_separator",
-                        f"{name!r} contains a path separator.",
-                        field=name,
-                        actual=text,
-                    )
                 rendered[name] = text
             except NameSpecError as exc:
                 owner = self._owner.get(name)
@@ -553,7 +830,34 @@ class Template:
                 skipping = False
             elif not skipping:
                 output.append(piece if isinstance(piece, str) else rendered[piece.name])
-        return "".join(output)
+        text = "".join(output)
+        if strict:
+            result = self.validate(text, "", "location" if self.has_root else "name")
+            expected = {name: working[name] for name in dict.fromkeys(self.names) if name in wanted}
+            if self.has_root:
+                expected[ROOT] = rendered[ROOT]
+            mismatches = [
+                Diagnostic(
+                    "non_roundtripping_value",
+                    f"Formatted {name!r} is parsed as a different value.",
+                    field=name,
+                    expected=value,
+                    actual=result.fields.get(name),
+                )
+                for name, value in expected.items()
+                if result.fields.get(name) != value
+                or type(result.fields.get(name)) is not type(value)
+            ]
+            if mismatches:
+                raise NameSpecError(mismatches)
+            if not result.valid:
+                fail(
+                    "non_roundtripping_value",
+                    "The formatted text does not validate against its template.",
+                    expected=expected,
+                    actual=text,
+                )
+        return text
 
     def _composite_value(self, name: str, value: Any) -> dict[str, str | int]:
         template = self.fields[name].template

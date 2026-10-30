@@ -60,13 +60,15 @@ def test_bound_classes_come_back_from_parse_with_their_methods(catalog):
     model = catalog.parse("Donut_v004.abc", "asset_model")
     assert type(model) is AssetFile
     assert model.fields["version"] == 4 and model.metadata["entities"] == ("Project", "Asset")
-    assert model.next_version() == "/jobs/show17/assets/Donut/Donut_v005.abc"
+    assert model.next_version().as_posix() == "/jobs/show17/assets/Donut/Donut_v005.abc"
     assert model.sg_asset(str.upper) == "DONUT" and calls == ["Donut"]
     assert type(catalog.parse("Donut.abc")) is AssetFile
     scene = catalog.parse("0010_v001.nk")
     assert type(scene) is ShotFile and not hasattr(scene, "sg_asset")
-    assert scene.next_version().endswith("/shots/0010/0010_v002.nk")
-    assert repr(scene) == "ShotFile('shot_scene', {'shot': '0010', 'version': 1, 'ext': 'nk'})"
+    assert scene.next_version().as_posix().endswith("/shots/0010/0010_v002.nk")
+    assert repr(scene) == (
+        "ShotFile('shot_scene', {'shot': '0010', 'version': 1, 'ext': 'nk'}, source='name')"
+    )
     assert catalog.resource_class("asset_alias") is AssetFile
     assert catalog.resource_class("shot_scene") is ShotFile
 

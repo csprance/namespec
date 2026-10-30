@@ -65,7 +65,7 @@ def test_composites_parse_to_parts_and_joined_values(catalog):
         "project_number": "1000",
         "project_name": "TestShow",
     }
-    assert located.locate() == PATH
+    assert located.locate().as_posix() == PATH
     assert catalog.inspect(PATH, source="location").status == "valid"
     exported = catalog.definition.to_dict()["fields"]["Shot"]
     assert exported["kind"] == "composite" and exported["template"] == "{Sequence}_{shotnum}"
@@ -173,8 +173,8 @@ def test_roots_are_literal_prefixes_tried_in_turn(catalog):
         == "invalid"
     )
     fields = {**FIELDS, "project_code": "1000_TestShow"}
-    assert catalog.locate("shot_work_scene", fields, root="windows") == windows
-    assert catalog.locate("shot_work_scene", fields, root="/Volumes") == PATH
+    assert catalog.locate("shot_work_scene", fields, root="windows").as_posix() == windows
+    assert catalog.locate("shot_work_scene", fields, root="/Volumes").as_posix() == PATH
     for root, code in ((None, "missing_field"), ("/mnt", "invalid_field"), (3, "invalid_type")):
         with pytest.raises(NameSpecError) as exc:
             catalog.locate("shot_work_scene", fields, root=root)

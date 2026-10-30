@@ -2,7 +2,7 @@
 
 [studio.names](studio.names) demonstrates a small production naming system using fictional projects, assets, identifiers, and sample values. MoonOrchard is an imaginary show, KestrelQuest an imaginary adventure series, and PixelTea2042 an imaginary campaign. These examples are teaching data, not a production studio's naming policy.
 
-Read from simple to complex: reusable field rules, simple identities, qualified names, workfiles, files with locations, then frame sequences. Optional tags, job suffixes, and frame components use separate resource definitions because Namespec does not yet support optional template groups.
+Read from simple to complex: reusable field rules, simple identities, qualified names, workfiles, files with locations, then frame sequences. This example keeps optional tags, job suffixes, and frame components in separate resource definitions so its CSV cases can name each form. Namespec also supports optional template groups, demonstrated in [guide.names](guide.names).
 
 ## Editable examples
 
@@ -30,7 +30,10 @@ assert item.fields == {
     "version": "017",
     "ext": "abc",
 }
-assert item.locate() == ("pub/mdl/outputs/prop_Lantern_mdl_v017/prop_Lantern_mdl_model_v017.abc")
+assert (
+    item.locate().as_posix()
+    == "pub/mdl/outputs/prop_Lantern_mdl_v017/prop_Lantern_mdl_model_v017.abc"
+)
 ```
 
 ## Context is part of identification

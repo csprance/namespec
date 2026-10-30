@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, dataclass, field, fields, is_dataclass, replace
+from types import MappingProxyType
 from typing import Any, NoReturn
 
 SPEC_VERSION = 1
@@ -75,6 +76,11 @@ class FieldSpec:
     width: int = 0
     samples: tuple[str, ...] = ()
     template: str | None = None
+    maximum: int | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "choices", tuple(self.choices))
+        object.__setattr__(self, "samples", tuple(self.samples))
 
 
 @dataclass(frozen=True)
@@ -83,38 +89,52 @@ class ResourceSpec:
     template: str | None
     location: str | None = None
     reader_field: str | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "metadata", _freeze(self.metadata))
 
 
 @dataclass(frozen=True)
 class ExampleSpec:
     resource: str
     input: str
-    expected: dict[str, str | int] = field(default_factory=dict)
+    expected: Mapping[str, str | int] = field(default_factory=dict)
     error_code: str | None = None
     source: str = "name"
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "expected", _freeze(self.expected))
 
 
 @dataclass(frozen=True)
 class Definition:
     spec_version: int
-    fields: dict[str, FieldSpec]
-    resources: dict[str, ResourceSpec]
-    readers: dict[str, str]
+    fields: Mapping[str, FieldSpec]
+    resources: Mapping[str, ResourceSpec]
+    readers: Mapping[str, str]
     examples: tuple[ExampleSpec, ...]
-    roots: dict[str, str] = field(default_factory=dict)
-    normalize: dict[str, str] = field(default_factory=dict)
+    roots: Mapping[str, str] = field(default_factory=dict)
+    normalize: Mapping[str, str] = field(default_factory=dict)
     # Where declarations sit in the rule text, keyed like ("example", 0, "input"). Editors
     # and test reports use it; it is not part of the model, so the export leaves it out.
-    spans: dict[tuple[str | int, ...], tuple[int, int]] = field(
+    spans: Mapping[tuple[str | int, ...], tuple[int, int]] = field(
         default_factory=dict, compare=False, repr=False
     )
 
+    def __post_init__(self) -> None:
+        # Copy before freezing so a caller's input dictionaries cannot change compiled rules.
+        for name in ("fields", "resources", "readers", "roots", "normalize", "spans"):
+            object.__setattr__(self, name, _freeze(getattr(self, name)))
+        object.__setattr__(self, "examples", tuple(self.examples))
+
     def to_dict(self) -> dict[str, Any]:
         """Export the model with JSON-native containers; text regexes keep Python re semantics."""
-        model = asdict(self)
-        del model["spans"]
-        return _jsonable(model)
+        return {
+            item.name: _jsonable(getattr(self, item.name))
+            for item in fields(self)
+            if item.name != "spans"
+        }
 
 
 @dataclass(frozen=True)
@@ -137,7 +157,7 @@ def validate_field_spec(spec: FieldSpec, sample_spans: Sequence[tuple[int, int]]
     if spec.kind == "text":
         try:
             regex = re.compile(spec.pattern or "")
-        except re.error as exc:
+        except (re.error, OverflowError, RecursionError) as exc:
             fail("invalid_pattern", f"{spec.name}: {exc}")
         if regex.fullmatch(""):
             fail("empty_field", f"{spec.name} must not accept an empty string.")
@@ -152,8 +172,10 @@ def validate_field_spec(spec: FieldSpec, sample_spans: Sequence[tuple[int, int]]
                     span=sample_spans[index] if sample_spans else None,
                 )
     elif spec.kind == "integer":
-        if spec.minimum < 0 or spec.width < 0:
-            fail("invalid_integer", "Minimum and padding must be nonnegative.")
+        if spec.width < 0:
+            fail("invalid_integer", "Padding must be nonnegative.")
+        if spec.maximum is not None and spec.maximum < spec.minimum:
+            fail("invalid_integer", "Maximum must be at least the minimum.")
     elif spec.kind == "enum":
         if not spec.choices or any(not value for value in spec.choices):
             fail("empty_field", f"{spec.name} has an empty enum choice.")
@@ -173,8 +195,18 @@ def check_root(name: str, path: str) -> None:
         fail("invalid_root", f"Root {name!r} must not end with a slash.", field=name, actual=path)
 
 
+def _freeze(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return MappingProxyType({key: _freeze(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze(item) for item in value)
+    return value
+
+
 def _jsonable(value: Any) -> Any:
-    if isinstance(value, dict):
+    if is_dataclass(value):
+        return {item.name: _jsonable(getattr(value, item.name)) for item in fields(value)}
+    if isinstance(value, Mapping):
         return {key: _jsonable(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
         return [_jsonable(item) for item in value]

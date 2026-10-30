@@ -17,11 +17,17 @@ from .models import Diagnostic, ExampleResult, NameSpecError, position
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Validate names against readable rules.")
     parser.add_argument("schema", help="Path to a .names rule document, or - to read stdin")
+    parser.add_argument(
+        "--strict", action="store_true", help="Reject generated names that change field values"
+    )
+    parser.add_argument(
+        "--filesystem", choices=["posix", "windows", "portable"], help="Check filesystem components"
+    )
     commands = parser.add_subparsers(dest="command", required=True)
     inspect = commands.add_parser("inspect", help="Identify and validate a name or location")
     inspect.add_argument("text")
     inspect.add_argument("--resource")
-    inspect.add_argument("--source", choices=["name", "location"], default="name")
+    inspect.add_argument("--source", choices=["auto", "name", "location"], default="auto")
     test = commands.add_parser("test", help="Run the rule document's examples and rejections")
     test.add_argument("--json", action="store_true", help="Report every example as JSON")
     export = commands.add_parser("export", help="Export the compiled model as JSON")
@@ -39,11 +45,11 @@ def main(argv: list[str] | None = None) -> int:
             source = sys.stdin.buffer.read().decode("utf-8")
         else:
             source = Path(args.schema).read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         print(f"{label}: {exc}" if readable else json.dumps({"error": str(exc)}))
         return 2
     try:
-        catalog = Catalog.from_string(source)
+        catalog = Catalog.from_string(source, strict=args.strict, filesystem=args.filesystem)
     except NameSpecError as exc:
         if readable:
             for item in exc.diagnostics:
@@ -82,7 +88,8 @@ def main(argv: list[str] | None = None) -> int:
             fields = json.loads(args.fields)
             if not isinstance(fields, dict):
                 parser.error("fields must be a JSON object")
-            output = {args.command: getattr(catalog, args.command)(args.resource, **fields)}
+            value = getattr(catalog, args.command)(args.resource, **fields)
+            output = {args.command: value.as_posix() if isinstance(value, Path) else value}
             success = True
         print(json.dumps(output, indent=2))
         return 0 if success else 1

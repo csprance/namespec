@@ -3,12 +3,10 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+.hypothesis/
 dist/
 *.egg-info/
 node_modules/
 *.vsix
 
-# Studio-specific conventions live next to the studio's own code, not in this repository.
-examples/harbor*.names
-tests/cases/harbor_*.csv
-tests/test_harbor.py
+# Keep machine-specific exclusions in .git/info/exclude.
